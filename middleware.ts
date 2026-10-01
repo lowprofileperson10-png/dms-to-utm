@@ -10,6 +10,7 @@ const isPublicRoute = createRouteMatcher([
   "/planos",
   "/api/health",
   "/api/webhooks(.*)",
+  "/__clerk(.*)",
 ])
 const isAdminPage = createRouteMatcher(["/admin(.*)"])
 const isAdminApi = createRouteMatcher(["/api/admin(.*)"])

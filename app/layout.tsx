@@ -56,35 +56,35 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider
-      localization={ptBR}
-      appearance={{
-        variables: {
-          colorPrimary: "#f4f4f5",
-          colorPrimaryForeground: "#18181b",
-          colorBackground: "#18181b",
-          colorForeground: "#f4f4f5",
-          colorMutedForeground: "#a1a1aa",
-          colorInput: "#27272a",
-          colorInputForeground: "#f4f4f5",
-          colorNeutral: "#f4f4f5",
-          borderRadius: "0.75rem",
-          fontFamily: "var(--font-manrope), sans-serif",
-        },
-      }}
-    >
-      <html lang="pt-BR" className="dark">
-        <head>
-          <link
-            href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=Instrument+Sans:wght@400;500;600;700&display=swap"
-            rel="stylesheet"
-          />
-        </head>
-        <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
+    <html lang="pt-BR" className="dark">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
+        <ClerkProvider
+          localization={ptBR}
+          appearance={{
+            variables: {
+              colorPrimary: "#f4f4f5",
+              colorPrimaryForeground: "#18181b",
+              colorBackground: "#18181b",
+              colorForeground: "#f4f4f5",
+              colorMutedForeground: "#a1a1aa",
+              colorInput: "#27272a",
+              colorInputForeground: "#f4f4f5",
+              colorNeutral: "#f4f4f5",
+              borderRadius: "0.75rem",
+              fontFamily: "var(--font-manrope), sans-serif",
+            },
+          }}
+        >
           <LenisProvider>{children}</LenisProvider>
           <Analytics />
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   )
 }
