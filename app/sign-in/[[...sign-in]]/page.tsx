@@ -10,7 +10,12 @@ export default function SignInPage() {
       <Link href="/" className="font-display text-2xl font-semibold text-zinc-100">
         TopoCAD
       </Link>
-      <SignIn />
+      <SignIn
+        routing="path"
+        path="/sign-in"
+        signUpUrl="/sign-up"
+        fallbackRedirectUrl="/dashboard"
+      />
     </main>
   )
 }

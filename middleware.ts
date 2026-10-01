@@ -1,3 +1,5 @@
+process.env.CLERK_SECRET_KEY ??= process.env.CLERK_SECRET_KEY_2
+
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
