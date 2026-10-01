@@ -2,6 +2,7 @@ import { Navbar } from "@/components/ui/navbar"
 import { HeroSection } from "@/components/sections/hero-section"
 import { ImpactSection } from "@/components/sections/impact-section"
 import { FeaturesSection } from "@/components/sections/features-section"
+import { HowItWorksSection } from "@/components/sections/how-it-works-section"
 import { TestimonialsSection } from "@/components/sections/testimonials-section"
 import { PricingSection } from "@/components/sections/pricing-section"
 import { CtaSection } from "@/components/sections/cta-section"
@@ -14,6 +15,7 @@ export default function Home() {
       <HeroSection />
       <ImpactSection />
       <FeaturesSection />
+      <HowItWorksSection />
       <TestimonialsSection />
       <PricingSection />
       <CtaSection />

@@ -1,0 +1,65 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import {
+  FolderOpen,
+  FilePlus2,
+  CreditCard,
+  LayoutDashboard,
+  Users,
+  FolderKanban,
+  Receipt,
+  BarChart3,
+  ScrollText,
+  Settings,
+  type LucideIcon,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+
+type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean }
+
+const navItems: Record<"dashboard" | "admin", NavItem[]> = {
+  dashboard: [
+    { href: "/dashboard", label: "Projetos", icon: FolderOpen, exact: true },
+    { href: "/dashboard/novo", label: "Novo projeto", icon: FilePlus2 },
+    { href: "/planos", label: "Planos", icon: CreditCard },
+  ],
+  admin: [
+    { href: "/admin", label: "Visão geral", icon: LayoutDashboard, exact: true },
+    { href: "/admin/usuarios", label: "Usuários", icon: Users },
+    { href: "/admin/projetos", label: "Projetos", icon: FolderKanban },
+    { href: "/admin/assinaturas", label: "Assinaturas", icon: Receipt },
+    { href: "/admin/uso", label: "Uso", icon: BarChart3 },
+    { href: "/admin/logs", label: "Logs", icon: ScrollText },
+    { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
+  ],
+}
+
+export function SideNav({ variant }: { variant: "dashboard" | "admin" }) {
+  const pathname = usePathname()
+
+  return (
+    <ul className="flex md:flex-col gap-1 overflow-x-auto">
+      {navItems[variant].map((item) => {
+        const Icon = item.icon
+        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+        return (
+          <li key={item.href}>
+            <Link
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors",
+                active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100",
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {item.label}
+            </Link>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}

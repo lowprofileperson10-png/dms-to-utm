@@ -3,67 +3,46 @@ import Link from "next/link"
 
 const plans = [
   {
-    name: "Starter",
-    description: "Perfect for side projects and small teams",
-    price: "$0",
-    period: "forever",
-    features: ["Up to 3 team members", "5 projects", "Basic analytics", "Community support", "1GB storage"],
-    cta: "Get Started",
+    name: "Grátis",
+    description: "Para conhecer a ferramenta e projetos ocasionais",
+    price: "R$ 0",
+    period: "/mês",
+    features: ["3 memoriais por mês", "Exportação XLSX e DXF", "Histórico de projetos"],
+    cta: "Começar grátis",
+    href: "/sign-up",
     highlighted: false,
   },
   {
     name: "Pro",
-    description: "For growing teams that need more power",
-    price: "$29",
-    period: "/month",
-    features: [
-      "Unlimited team members",
-      "Unlimited projects",
-      "Advanced analytics",
-      "Priority support",
-      "100GB storage",
-      "Custom integrations",
-      "API access",
-    ],
-    cta: "Start Free Trial",
+    description: "Para quem processa memoriais todos os dias",
+    price: "R$ XX",
+    period: "/mês",
+    features: ["Memoriais ilimitados", "Suporte prioritário", "Histórico completo"],
+    cta: "Assinar Pro",
+    href: "/planos",
     highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    description: "For large organizations with custom needs",
-    price: "Custom",
-    period: "",
-    features: [
-      "Everything in Pro",
-      "Dedicated account manager",
-      "Custom SLA",
-      "On-premise deployment",
-      "Unlimited storage",
-      "Advanced security",
-      "Training & onboarding",
-    ],
-    cta: "Contact Sales",
-    highlighted: false,
   },
 ]
 
-export function PricingSection() {
+export function PricingSection({ headingLevel = "h2" }: { headingLevel?: "h1" | "h2" }) {
+  const Heading = headingLevel
+
   return (
-    <section id="pricing" className="px-6 py-24">
-      <div className="max-w-5xl mx-auto">
+    <section id="precos" className="px-6 py-24 scroll-mt-20">
+      <div className="max-w-3xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-16">
-          <p className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Pricing</p>
-          <h2 className="font-display text-4xl md:text-5xl font-bold text-zinc-100 mb-4">
-            Simple, transparent pricing
-          </h2>
+          <p className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Preços</p>
+          <Heading className="font-display text-4xl md:text-5xl font-bold text-zinc-100 mb-4">
+            Preços simples e transparentes
+          </Heading>
           <p className="text-zinc-500 max-w-xl mx-auto text-balance text-lg">
-            No hidden fees. No surprises. Choose the plan that works for you.
+            Sem taxas escondidas. Comece grátis e assine quando precisar de mais.
           </p>
         </div>
 
         {/* Pricing Grid */}
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 gap-6">
           {plans.map((plan) => (
             <div
               key={plan.name}
@@ -105,7 +84,7 @@ export function PricingSection() {
 
               {/* CTA */}
               <Link
-                href="#"
+                href={plan.href}
                 className={`block w-full py-3 px-6 text-center rounded-full font-medium text-sm transition-colors mt-auto ${
                   plan.highlighted
                     ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800"

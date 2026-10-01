@@ -1,7 +1,9 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Manrope } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { ClerkProvider } from "@clerk/nextjs"
+import { ptBR } from "@clerk/localizations"
 import { LenisProvider } from "@/components/providers/lenis-provider"
 import "./globals.css"
 
@@ -10,11 +12,20 @@ const manrope = Manrope({
   variable: "--font-manrope",
 })
 
+const description =
+  "Envie o memorial descritivo, converta DMS para UTM automaticamente, confira o polígono e exporte planilha e DXF para o AutoCAD. Sem retrabalho manual."
+
 export const metadata: Metadata = {
-  title: "Liquid Metal Buttons | Premium UI Components",
-  description:
-    "A collection of premium button components featuring animated liquid metal borders powered by Paper Shaders.",
+  title: "TopoCAD — Memorial descritivo em PDF para DXF",
+  description,
   generator: "v0.app",
+  applicationName: "TopoCAD",
+  openGraph: {
+    title: "TopoCAD — Memorial descritivo em PDF para DXF",
+    description,
+    locale: "pt_BR",
+    type: "website",
+  },
   icons: {
     icon: [
       {
@@ -34,23 +45,46 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  colorScheme: "dark",
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=Instrument+Sans:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
-        <LenisProvider>{children}</LenisProvider>
-        <Analytics />
-      </body>
-    </html>
+    <ClerkProvider
+      localization={ptBR}
+      appearance={{
+        variables: {
+          colorPrimary: "#f4f4f5",
+          colorPrimaryForeground: "#18181b",
+          colorBackground: "#18181b",
+          colorForeground: "#f4f4f5",
+          colorMutedForeground: "#a1a1aa",
+          colorInput: "#27272a",
+          colorInputForeground: "#f4f4f5",
+          colorNeutral: "#f4f4f5",
+          borderRadius: "0.75rem",
+          fontFamily: "var(--font-manrope), sans-serif",
+        },
+      }}
+    >
+      <html lang="pt-BR" className="dark">
+        <head>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+          />
+        </head>
+        <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
+          <LenisProvider>{children}</LenisProvider>
+          <Analytics />
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }

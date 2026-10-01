@@ -1,8 +1,8 @@
 const metrics = [
-  { value: "99.99%", label: "Uptime SLA", description: "Enterprise reliability" },
-  { value: "10M+", label: "API Requests/Day", description: "Proven at scale" },
-  { value: "<50ms", label: "Avg Response", description: "Blazing fast" },
-  { value: "150+", label: "Countries", description: "Global reach" },
+  { value: "SIRGAS", label: "Datum 2000", description: "Padrão oficial brasileiro" },
+  { value: "18S–25S", label: "Fusos UTM", description: "Cobertura nacional" },
+  { value: "<1 min", label: "Por memorial", description: "Do PDF à planilha" },
+  { value: "2", label: "Formatos", description: "XLSX e DXF" },
 ]
 
 export function ImpactSection() {
@@ -11,10 +11,12 @@ export function ImpactSection() {
       <div className="max-w-5xl mx-auto">
         {/* Impact Section Header */}
         <div className="text-center mb-12">
-          <p className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Our Impact</p>
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-zinc-100 mb-4">Trusted by teams worldwide</h2>
+          <p className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-4">Precisão</p>
+          <h2 className="font-display text-3xl md:text-4xl font-bold text-zinc-100 mb-4">
+            Feito para o dia a dia do topógrafo
+          </h2>
           <p className="text-zinc-500 max-w-lg mx-auto text-balance">
-            Numbers that speak for themselves. See why thousands choose us.
+            Compatível com memoriais SIGEF/INCRA e com o fluxo que você já usa no CAD.
           </p>
         </div>
 
