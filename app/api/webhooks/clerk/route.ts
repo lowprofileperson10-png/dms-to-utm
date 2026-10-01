@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       "svix-id": svixId,
       "svix-timestamp": svixTimestamp,
       "svix-signature": svixSignature,
-    }) as WebhookEvent
+    }) as unknown as WebhookEvent
   } catch {
     return Response.json({ error: "Assinatura inválida" }, { status: 400 })
   }
