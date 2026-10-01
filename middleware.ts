@@ -1,40 +1,11 @@
 process.env.CLERK_SECRET_KEY ??= process.env.CLERK_SECRET_KEY_2
 
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
+import { clerkMiddleware } from "@clerk/nextjs/server"
 
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/planos",
-  "/api/health",
-  "/api/webhooks(.*)",
-  "/__clerk(.*)",
-])
-const isAdminPage = createRouteMatcher(["/admin(.*)"])
-const isAdminApi = createRouteMatcher(["/api/admin(.*)"])
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isPublicRoute(req)) return
-
-  if (isAdminApi(req)) {
-    const { userId, sessionClaims } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
-    }
-    if (sessionClaims?.metadata?.role !== "admin") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
-    }
-    return
-  }
-
-  const { sessionClaims } = await auth.protect()
-
-  if (isAdminPage(req) && sessionClaims?.metadata?.role !== "admin") {
-    return NextResponse.redirect(new URL("/dashboard", req.url))
-  }
-})
+// A autenticação e a autorização são validadas nas páginas e rotas do servidor.
+// O middleware fica apenas responsável por inicializar o Clerk, evitando que
+// callbacks de rota causem falhas de invocação no proxy do Next.js 16.
+export default clerkMiddleware()
 
 export const config = {
   matcher: [
