@@ -6,7 +6,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
- 
+  experimental: {
+    // Isola o compilador Webpack para evitar que o processo principal
+    // acumule todos os módulos até atingir o limite de memória da Vercel.
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
+  },
 }
 
 export default nextConfig
