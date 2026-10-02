@@ -1,17 +1,11 @@
-import { clerkMiddleware } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
-import type { NextFetchEvent, NextRequest } from "next/server"
+import type { NextRequest } from "next/server"
 
-// O proxy precisa continuar respondendo mesmo quando o deployment ainda não
-// recebeu as credenciais do Clerk. A falha de inicialização não pode derrubar
-// as páginas públicas com MIDDLEWARE_INVOCATION_FAILED.
-export default async function proxy(request: NextRequest, event: NextFetchEvent) {
-  try {
-    const handleClerk = clerkMiddleware()
-    return await handleClerk(request, event)
-  } catch {
-    return NextResponse.next()
-  }
+// Rotas públicas não dependem do Clerk. A autenticação é validada no servidor
+// pelas páginas e actions protegidas, evitando que uma configuração ausente do
+// provedor derrube o deployment inteiro com MIDDLEWARE_INVOCATION_FAILED.
+export default function proxy(_request: NextRequest) {
+  return NextResponse.next()
 }
 
 export const config = {
