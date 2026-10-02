@@ -1,9 +1,16 @@
 import { clerkMiddleware } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 
-// A autenticação e a autorização são validadas nas páginas e rotas do servidor.
-// O middleware fica apenas responsável por inicializar o Clerk, evitando que
-// callbacks de rota causem falhas de invocação no proxy do Next.js 16.
-export default clerkMiddleware()
+const clerkIsConfigured = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+    (process.env.CLERK_SECRET_KEY || process.env.CLERK_SECRET_KEY_4),
+)
+
+// Permite que páginas públicas continuem renderizando quando as variáveis do
+// Clerk ainda não foram adicionadas ao ambiente do deployment.
+export default clerkIsConfigured
+  ? clerkMiddleware()
+  : () => NextResponse.next()
 
 export const config = {
   matcher: [

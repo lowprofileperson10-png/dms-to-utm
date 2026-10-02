@@ -50,6 +50,20 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 }
 
+const clerkIsConfigured = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+    (process.env.CLERK_SECRET_KEY || process.env.CLERK_SECRET_KEY_4),
+)
+
+function AppContent({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <LenisProvider>{children}</LenisProvider>
+      <Analytics />
+    </>
+  )
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -64,26 +78,29 @@ export default function RootLayout({
         />
       </head>
       <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
-        <ClerkProvider
-          localization={ptBR}
-          appearance={{
-            variables: {
-              colorPrimary: "#f4f4f5",
-              colorPrimaryForeground: "#18181b",
-              colorBackground: "#18181b",
-              colorForeground: "#f4f4f5",
-              colorMutedForeground: "#a1a1aa",
-              colorInput: "#27272a",
-              colorInputForeground: "#f4f4f5",
-              colorNeutral: "#f4f4f5",
-              borderRadius: "0.75rem",
-              fontFamily: "var(--font-manrope), sans-serif",
-            },
-          }}
-        >
-          <LenisProvider>{children}</LenisProvider>
-          <Analytics />
-        </ClerkProvider>
+        {clerkIsConfigured ? (
+          <ClerkProvider
+            localization={ptBR}
+            appearance={{
+              variables: {
+                colorPrimary: "#f4f4f5",
+                colorPrimaryForeground: "#18181b",
+                colorBackground: "#18181b",
+                colorForeground: "#f4f4f5",
+                colorMutedForeground: "#a1a1aa",
+                colorInput: "#27272a",
+                colorInputForeground: "#f4f4f5",
+                colorNeutral: "#f4f4f5",
+                borderRadius: "0.75rem",
+                fontFamily: "var(--font-manrope), sans-serif",
+              },
+            }}
+          >
+            <AppContent>{children}</AppContent>
+          </ClerkProvider>
+        ) : (
+          <AppContent>{children}</AppContent>
+        )}
       </body>
     </html>
   )

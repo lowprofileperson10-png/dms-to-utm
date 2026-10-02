@@ -1,8 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { Show, UserButton } from "@clerk/nextjs"
-
 const navLinks = [
   { href: "/#recursos", label: "Recursos" },
   { href: "/#como-funciona", label: "Como funciona" },
@@ -28,29 +26,18 @@ export function Navbar() {
               </Link>
             ))}
           </div>
-          <Show when="signed-out">
-            <Link
-              href="/sign-in"
-              className="px-4 py-1.5 text-sm rounded-full transition-colors text-zinc-400 hover:text-zinc-100"
-            >
-              Entrar
-            </Link>
-            <Link
-              href="/sign-up"
-              className="ml-2 px-4 py-1.5 text-sm rounded-full bg-zinc-100 text-zinc-900 font-medium hover:bg-zinc-200 transition-colors"
-            >
-              Começar grátis
-            </Link>
-          </Show>
-          <Show when="signed-in">
-            <Link
-              href="/dashboard"
-              className="mr-2 px-4 py-1.5 text-sm rounded-full bg-zinc-100 text-zinc-900 font-medium hover:bg-zinc-200 transition-colors"
-            >
-              Dashboard
-            </Link>
-            <UserButton />
-          </Show>
+          <Link
+            href="/sign-in"
+            className="px-4 py-1.5 text-sm rounded-full transition-colors text-zinc-400 hover:text-zinc-100"
+          >
+            Entrar
+          </Link>
+          <Link
+            href="/sign-up"
+            className="ml-2 px-4 py-1.5 text-sm rounded-full bg-zinc-100 text-zinc-900 font-medium hover:bg-zinc-200 transition-colors"
+          >
+            Começar grátis
+          </Link>
         </div>
       </nav>
     </header>
