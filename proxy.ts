@@ -1,5 +1,3 @@
-process.env.CLERK_SECRET_KEY ??= process.env.CLERK_SECRET_KEY_2
-
 import { clerkMiddleware } from "@clerk/nextjs/server"
 
 // A autenticação e a autorização são validadas nas páginas e rotas do servidor.
