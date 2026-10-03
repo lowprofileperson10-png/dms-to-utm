@@ -1,7 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Download, Map as MapIcon } from "lucide-react"
+import { useMemo, useState, useTransition } from "react"
+import { Download, Map as MapIcon, Plus, Save, Trash2 } from "lucide-react"
+import { saveProjectVertices } from "@/app/dashboard/novo/actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -59,10 +60,12 @@ function PolygonPreview({ points }: { points: { e: number; n: number }[] }) {
 }
 
 export function ProjectView({
+  projectId,
   initialVertices,
   initialZone,
   initialDatum,
 }: {
+  projectId: string
   initialVertices: Vertex[]
   initialZone: string | null
   initialDatum: string | null
@@ -70,7 +73,25 @@ export function ProjectView({
   const [vertices, setVertices] = useState(initialVertices)
   const [zone, setZone] = useState(initialZone ?? "23S")
   const [datum, setDatum] = useState(initialDatum ?? "SIRGAS2000")
+  const [message, setMessage] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
   const metrics = useMemo(() => computeMetrics(vertices), [vertices])
+
+  function save() {
+    setMessage(null)
+    startTransition(async () => {
+      const result = await saveProjectVertices({ projectId, zone, datum, vertices })
+      setMessage(result.ok ? "Vértices salvos." : result.error)
+    })
+  }
+
+  function addVertex() {
+    setVertices((current) => [...current, { id: `V${current.length + 1}`, e: null, n: null, azimuth: null, distance: null }])
+  }
+
+  function removeVertex(index: number) {
+    setVertices((current) => current.filter((_, i) => i !== index))
+  }
 
   function updateVertex(index: number, field: "e" | "n", value: string) {
     const parsed = value === "" ? null : Number(value.replace(",", "."))
@@ -117,6 +138,7 @@ export function ProjectView({
                   <TableHead className="text-zinc-500">N (m)</TableHead>
                   <TableHead className="text-zinc-500">Azimute</TableHead>
                   <TableHead className="text-zinc-500">Distância</TableHead>
+                  <TableHead className="sr-only">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -137,11 +159,27 @@ export function ProjectView({
                     ))}
                     <TableCell className="font-mono text-zinc-400">{vertex.azimuth ?? "—"}</TableCell>
                     <TableCell className="text-zinc-400">{formatLength(vertex.distance)}</TableCell>
+                    <TableCell>
+                      <button type="button" onClick={() => removeVertex(index)} className="rounded-md p-2 text-zinc-500 hover:bg-zinc-800 hover:text-red-400" aria-label={`Remover vértice ${vertex.id}`}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/60 p-4">
+            <button type="button" onClick={addVertex} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm text-zinc-300 hover:bg-zinc-900">
+              <Plus className="h-4 w-4" aria-hidden="true" /> Adicionar vértice
+            </button>
+            <div className="flex items-center gap-3">
+              {message && <span role="status" className="text-sm text-zinc-400">{message}</span>}
+              <button type="button" onClick={save} disabled={isPending} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-zinc-100 px-4 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-60">
+                <Save className="h-4 w-4" aria-hidden="true" /> {isPending ? "Salvando..." : "Salvar alterações"}
+              </button>
+            </div>
+          </div>
         </div>
 
         <aside className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5 space-y-4 h-fit">

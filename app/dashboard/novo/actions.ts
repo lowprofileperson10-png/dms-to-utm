@@ -58,3 +58,36 @@ export async function retryProject(projectId: string) {
   if (!data) return { ok: false as const, error: "Projeto não encontrado." }
   return processMemorial(projectId)
 }
+
+const vertexSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  e: z.number().finite().nullable(),
+  n: z.number().finite().nullable(),
+  azimuth: z.string().max(80).nullable().optional(),
+  distance: z.number().finite().nonnegative().nullable().optional(),
+})
+
+const saveVerticesSchema = z.object({
+  projectId: z.string().uuid(),
+  zone: z.string().regex(/^(1[89]|2[0-5])S$/),
+  datum: z.literal("SIRGAS2000"),
+  vertices: z.array(vertexSchema).max(500),
+})
+
+export async function saveProjectVertices(input: unknown) {
+  const userId = await requireUser()
+  const parsed = saveVerticesSchema.safeParse(input)
+  if (!parsed.success) return { ok: false as const, error: "Confira os dados dos vértices e tente novamente." }
+
+  const supabase = createAdminClient()
+  const { data: project } = await supabase.from("projects").select("id").eq("id", parsed.data.projectId).eq("user_id", userId).maybeSingle()
+  if (!project) return { ok: false as const, error: "Projeto não encontrado." }
+
+  const { error } = await supabase.from("projects").update({
+    vertices: parsed.data.vertices,
+    utm_zone: parsed.data.zone,
+    datum: parsed.data.datum,
+  }).eq("id", parsed.data.projectId).eq("user_id", userId)
+  if (error) return { ok: false as const, error: "Não foi possível salvar os vértices." }
+  return { ok: true as const }
+}
