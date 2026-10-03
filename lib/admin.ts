@@ -12,8 +12,11 @@ export async function writeAuditLog(actorId: string, action: string, targetUserI
   if (error) throw new Error("Falha ao registrar auditoria")
 }
 
-export function jsonError(message: string, status = 400) {
-  return Response.json({ ok: false, error: message }, { status })
+export function jsonError(message: string, status = 400, details?: unknown) {
+  return Response.json(
+    { ok: false, error: message, ...(details === undefined ? {} : { details }) },
+    { status, headers: { "content-type": "application/json" } },
+  )
 }
 
 export function isSelfMutation(actorId: string, targetUserId: string) {
