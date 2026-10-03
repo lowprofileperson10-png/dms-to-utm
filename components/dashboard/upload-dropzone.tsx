@@ -4,14 +4,13 @@ import { useRef, useState, type DragEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { FileUp, FileText, X } from "lucide-react"
-import { useSupabase } from "@/lib/supabase/client"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { attachSourcePdf, createProject } from "@/app/dashboard/novo/actions"
+import { createProject } from "@/app/dashboard/novo/actions"
 
-const MAX_SIZE = 20 * 1024 * 1024
+const MAX_SIZE = 10 * 1024 * 1024
 
 type Stage = "idle" | "creating" | "uploading" | "done" | "error"
 
@@ -26,7 +25,6 @@ const stageLabel: Record<Stage, string> = {
 
 export function UploadDropzone() {
   const router = useRouter()
-  const supabase = useSupabase()
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [name, setName] = useState("")
@@ -45,7 +43,7 @@ export function UploadDropzone() {
       return
     }
     if (selected.size > MAX_SIZE) {
-      setError("O arquivo deve ter no máximo 20 MB.")
+      setError("O arquivo deve ter no máximo 10 MB.")
       return
     }
     setFile(selected)
@@ -64,28 +62,16 @@ export function UploadDropzone() {
     setError(null)
     setStage("creating")
 
-    const created = await createProject({ name, fileName: file.name })
+    const formData = new FormData()
+    formData.set("name", name)
+    formData.set("file", file)
+    setStage("uploading")
+
+    const created = await createProject(formData)
     if (!created.ok) {
       setStage("error")
       setError(created.error)
       setLimitReached(Boolean(created.limitReached))
-      return
-    }
-
-    setStage("uploading")
-    const { error: uploadError } = await supabase.storage
-      .from("memoriais")
-      .upload(created.storagePath, file, { contentType: "application/pdf", upsert: true })
-    if (uploadError) {
-      setStage("error")
-      setError(`Projeto criado, mas o upload falhou: ${uploadError.message}`)
-      return
-    }
-
-    const attached = await attachSourcePdf(created.projectId, created.storagePath)
-    if (!attached.ok) {
-      setStage("error")
-      setError(attached.error)
       return
     }
 
@@ -112,7 +98,7 @@ export function UploadDropzone() {
       >
         <FileUp className="h-8 w-8 text-zinc-500" aria-hidden="true" />
         <span className="font-medium text-zinc-200">Arraste o PDF do memorial aqui</span>
-        <span className="text-sm text-zinc-500">ou clique para selecionar · máx. 20 MB</span>
+        <span className="text-sm text-zinc-500">ou clique para selecionar · máx. 10 MB</span>
       </button>
       <input
         ref={inputRef}
