@@ -9,8 +9,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@clerk/localizations": "^4.21.2",
-    "@clerk/nextjs": "^7.9.10",
     "@emotion/is-prop-valid": "latest",
     "@hookform/resolvers": "^3.10.0",
     "@paper-design/shaders-react": "0.0.68",
@@ -66,7 +64,6 @@
     "recharts": "2.15.4",
     "server-only": "^0.0.1",
     "sonner": "^1.7.4",
-    "svix": "^2.6.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "unpdf": "^1.8.1",

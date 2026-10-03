@@ -1,6 +1,5 @@
 import type React from "react"
 import Link from "next/link"
-import { UserButton } from "@clerk/nextjs"
 import { SideNav } from "@/components/app-shell/side-nav"
 
 export function AppShell({
@@ -36,7 +35,7 @@ export function AppShell({
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="h-14 flex items-center justify-end gap-3 px-6 border-b border-zinc-900">
           {topbarExtra}
-          <UserButton />
+          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-100">Sair</Link>
         </header>
         <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>
