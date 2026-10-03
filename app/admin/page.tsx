@@ -1,7 +1,9 @@
 import { AdminPage, AdminStatGrid } from "@/components/admin/admin-page"
 import { createAdminClient } from "@/lib/supabase/server"
+import { requireAdmin } from "@/lib/auth"
 
 export default async function AdminPageRoute() {
+  await requireAdmin()
   const supabase = createAdminClient()
   const [{ count: users }, { count: projects }, { count: memorials }, { count: subscriptions }] = await Promise.all([
     supabase.from("profiles").select("user_id", { count: "exact", head: true }),
