@@ -107,19 +107,19 @@ export function ProjectView({
           <TabsTrigger value="dados">Dados</TabsTrigger>
           <TabsTrigger value="mapa">Mapa</TabsTrigger>
         </TabsList>
-        <div className="flex gap-2">
-          {["XLSX", "DXF"].map((format) => (
-            <button
-              key={format}
-              type="button"
-              disabled
-              title="Em breve"
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-400 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              {format} <span className="text-xs text-zinc-600">Em breve</span>
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`/api/projects/${projectId}/export/pdf`}
+            className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" /> Memorial PDF
+          </a>
+          <a
+            href={`/api/projects/${projectId}/export/dxf`}
+            className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" /> Exportar DXF
+          </a>
         </div>
       </div>
 

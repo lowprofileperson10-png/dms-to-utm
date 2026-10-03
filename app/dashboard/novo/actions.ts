@@ -40,6 +40,8 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
   }
   const { error: insertError } = await supabase.from("projects").insert({ id: projectId, user_id: userId, name: parsed.data.name, status: "draft", source_pdf_path: storagePath, original_filename: fileName })
   if (insertError) { if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível criar o projeto. Tente novamente." } }
+  const { error: fileRecordError } = await supabase.from("project_files").insert({ project_id: projectId, kind: "memorial_pdf", storage_path: storagePath, original_filename: fileName, mime_type: "application/pdf", size_bytes: isFormData && file instanceof File ? file.size : null })
+  if (fileRecordError) { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o memorial. Tente novamente." } }
   try { await incrementUsage(userId) } catch { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o uso. Tente novamente." } }
   return { ok: true, projectId, storagePath }
 }
