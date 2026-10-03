@@ -3,46 +3,59 @@
 import { requireUser } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getUsageStatus, incrementUsage } from "@/lib/usage"
+import { processMemorial } from "@/lib/engine"
+import { z } from "zod"
+
+const MAX_SIZE = 10 * 1024 * 1024
+const projectInput = z.object({ name: z.string().trim().min(1).max(120) })
 
 type CreateProjectResult =
-  | { ok: true; projectId: string; storagePath: string }
+  | { ok: true; projectId: string }
   | { ok: false; error: string; limitReached?: boolean }
 
-export async function createProject(input: { name: string; fileName: string }): Promise<CreateProjectResult> {
+export async function createProject(formData: FormData): Promise<CreateProjectResult> {
   const userId = await requireUser()
-
-  const name = input.name.trim().slice(0, 120)
-  if (!name) return { ok: false, error: "Informe um nome para o projeto." }
-  if (!input.fileName.toLowerCase().endsWith(".pdf")) return { ok: false, error: "Envie um arquivo PDF." }
+  const parsed = projectInput.safeParse({ name: formData.get("name") })
+  const file = formData.get("file")
+  if (!parsed.success) return { ok: false, error: "Informe um nome para o projeto." }
+  if (!(file instanceof File)) return { ok: false, error: "Selecione um arquivo PDF." }
+  if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
+    return { ok: false, error: "O arquivo precisa ser um PDF válido." }
+  }
+  if (file.size > MAX_SIZE) return { ok: false, error: "O arquivo deve ter no máximo 10 MB." }
+  const magic = new Uint8Array(await file.slice(0, 4).arrayBuffer())
+  if (String.fromCharCode(...magic) !== "%PDF") return { ok: false, error: "O conteúdo do arquivo não é um PDF válido." }
 
   const usage = await getUsageStatus(userId)
-  if (!usage.canCreate) {
-    return { ok: false, error: "Você atingiu o limite do plano Grátis neste mês.", limitReached: true }
+  if (!usage.canCreate) return { ok: false, error: "Você atingiu o limite do plano Grátis neste mês.", limitReached: true }
+
+  const supabase = createAdminClient()
+  const projectId = crypto.randomUUID()
+  const storagePath = `${userId}/${projectId}.pdf`
+  const { error: uploadError } = await supabase.storage.from("memoriais").upload(storagePath, file, { contentType: "application/pdf", upsert: false })
+  if (uploadError) return { ok: false, error: "Não foi possível enviar o PDF. Tente novamente." }
+
+  const { error: insertError } = await supabase.from("projects").insert({ id: projectId, user_id: userId, name: parsed.data.name, status: "draft", source_pdf_path: storagePath, original_filename: file.name })
+  if (insertError) {
+    await supabase.storage.from("memoriais").remove([storagePath])
+    return { ok: false, error: "Não foi possível criar o projeto. Tente novamente." }
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("projects")
-    .insert({ user_id: userId, name, status: "draft" })
-    .select("id")
-    .single()
-  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao criar projeto." }
+  try {
+    await incrementUsage(userId)
+  } catch {
+    await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId)
+    await supabase.storage.from("memoriais").remove([storagePath])
+    return { ok: false, error: "Não foi possível registrar o uso. Tente novamente." }
+  }
 
-  await incrementUsage(userId)
-
-  return { ok: true, projectId: data.id, storagePath: `${userId}/${data.id}.pdf` }
+  return { ok: true, projectId }
 }
 
-export async function attachSourcePdf(projectId: string, storagePath: string) {
+export async function retryProject(projectId: string) {
   const userId = await requireUser()
-  if (!storagePath.startsWith(`${userId}/`)) return { ok: false as const, error: "Caminho inválido." }
-
   const supabase = createAdminClient()
-  const { error } = await supabase
-    .from("projects")
-    .update({ source_pdf_path: storagePath, status: "processing" })
-    .eq("id", projectId)
-    .eq("user_id", userId)
-  if (error) return { ok: false as const, error: error.message }
-  return { ok: true as const }
+  const { data } = await supabase.from("projects").select("id").eq("id", projectId).eq("user_id", userId).maybeSingle()
+  if (!data) return { ok: false as const, error: "Projeto não encontrado." }
+  return processMemorial(projectId)
 }
