@@ -1,0 +1,8 @@
+import { z } from "zod"
+import { requireAdminApi } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/server"
+import { jsonError, writeAuditLog } from "@/lib/admin"
+
+export async function GET() { const access = await requireAdminApi(); if (!access.ok) return access.response; const { data, error } = await createAdminClient().from("projects").select("id,user_id,name,status,area_m2,created_at").order("created_at", { ascending: false }); if (error) return jsonError("Não foi possível carregar projetos", 500); return Response.json({ ok: true, data }) }
+const deleteSchema = z.object({ id: z.string().uuid() })
+export async function DELETE(request: Request) { const access = await requireAdminApi(); if (!access.ok) return access.response; const parsed = deleteSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return jsonError("ID de projeto inválido"); const supabase = createAdminClient(); const { data: project } = await supabase.from("projects").select("id,user_id,name,source_pdf_path").eq("id", parsed.data.id).maybeSingle(); if (!project) return jsonError("Projeto não encontrado", 404); const { error } = await supabase.from("projects").delete().eq("id", project.id); if (error) return jsonError("Não foi possível excluir projeto", 500); if (project.source_pdf_path) await supabase.storage.from("memoriais").remove([project.source_pdf_path]); await writeAuditLog(access.userId, "project.deleted", project.user_id, { projectId: project.id, name: project.name }); return Response.json({ ok: true }) }
