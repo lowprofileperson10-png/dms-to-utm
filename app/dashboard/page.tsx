@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Plus } from "lucide-react"
 import { requireUser } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/server"
-import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/config"
+import { isSupabaseConfigured } from "@/lib/supabase/config"
 import { getUsageStatus } from "@/lib/usage"
 import { UsageCard } from "@/components/dashboard/usage-card"
 import { ProjectsTable, type ProjectRow } from "@/components/dashboard/projects-table"
@@ -14,13 +14,11 @@ export const metadata: Metadata = { title: "Projetos — TopoCAD" }
 export default async function DashboardPage() {
   const userId = await requireUser()
 
-  if (!isSupabaseConfigured() || !isSupabaseAdminConfigured()) {
+  if (!isSupabaseConfigured()) {
     return (
       <div className="space-y-6">
         <h1 className="font-display text-2xl font-semibold text-zinc-100">Projetos</h1>
-        <SetupNotice
-          variables={["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY"]}
-        />
+        <SetupNotice variables={["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]} />
       </div>
     )
   }
