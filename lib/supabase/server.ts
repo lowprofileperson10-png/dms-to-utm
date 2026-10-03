@@ -2,19 +2,18 @@ import "server-only"
 
 import { auth } from "@clerk/nextjs/server"
 import { createClient } from "@supabase/supabase-js"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+import { supabasePublishableKey, supabaseSecretKey, supabaseUrl } from "./config"
 
 /** Respects RLS: requests are authenticated with the current Clerk session token. */
 export function createServerClient() {
-  return createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+  return createClient(supabaseUrl!, supabasePublishableKey!, {
     accessToken: async () => (await auth()).getToken(),
   })
 }
 
 /** Bypasses RLS. Server-only: never import from a Client Component. */
 export function createAdminClient() {
-  return createClient(supabaseUrl, process.env.SUPABASE_SECRET_KEY!, {
+  return createClient(supabaseUrl!, supabaseSecretKey!, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }
