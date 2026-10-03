@@ -28,28 +28,28 @@ export type MemorialParseResult = {
 
 const NUMBER = "(?:\\d{1,3}(?:[.,]\\d+)?)"
 const DMS = new RegExp(`(?:[NSLOEW])?\\s*${NUMBER}\\s*[°º]\\s*${NUMBER}\\s*[']?\\s*${NUMBER}\\s*[\\\\\\\"]?\\s*[NSLOEW]?`, "i")
-const VERTEX_LINE = /(?:v(?:értice|ertice)?|ponto|pt)\\s*[-#: ]?\\s*([A-Z0-9._-]+)/i
-const DISTANCE = /(?:dist(?:ância|ancia)?|comprimento|dist\\.)\\s*[:=]?\\s*(\\d+(?:[.,]\\d+)?)\\s*m?/i
-const AZIMUTH = /(?:azimute|azimute)\\s*[:=]?\\s*([^;|]+)/i
+const VERTEX_LINE = /(?:v(?:értice|ertice)?|ponto|pt)\s*[-#: ]?\s*([A-Z0-9._-]+)/i
+const DISTANCE = /(?:dist(?:ância|ancia)?|comprimento|dist\.)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m?/i
+const AZIMUTH = /(?:azimute|azimute)\s*[:=]?\s*([^;|]+)/i
 
 function number(value: string) {
-  const parsed = Number(value.replace(/\\./g, "").replace(",", "."))
+  const parsed = Number(value.replace(/\./g, "").replace(",", "."))
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function normalizeLine(line: string) {
-  return line.replace(/\\s+/g, " ").trim()
+  return line.replace(/\s+/g, " ").trim()
 }
 
 export function parseMemorialText(text: string): MemorialParseResult {
   const warnings: string[] = []
-  const lines = text.split(/\\r?\\n/).map(normalizeLine).filter(Boolean)
-  if (!lines.length || text.replace(/\\s/g, "").length < 20) {
+  const lines = text.split(/\r?\n/).map(normalizeLine).filter(Boolean)
+  if (!lines.length || text.replace(/\s/g, "").length < 20) {
     return { ok: false, code: "PDF_SEM_TEXTO", error: "O PDF não contém texto extraível.", warnings }
   }
 
-  const datum = lines.find((line) => /SIRGAS\\s*2000|datum/i.test(line))?.match(/SIRGAS\\s*2000|WGS\\s*84/i)?.[0]
-  const zoneMatch = lines.join(" ").match(/(?:zona|fuso)\\s*(?:utm)?\\s*[:=]?\\s*(\\d{1,2})/i)
+  const datum = lines.find((line) => /SIRGAS\s*2000|datum/i.test(line))?.match(/SIRGAS\s*2000|WGS\s*84/i)?.[0]
+  const zoneMatch = lines.join(" ").match(/(?:zona|fuso)\s*(?:utm)?\s*[:=]?\s*(\d{1,2})/i)
   const utmZone = zoneMatch ? Number(zoneMatch[1]) : undefined
   const vertices: ParsedVertex[] = []
 
@@ -94,7 +94,7 @@ export const memorialParseCodes = {
 } as const
 
 export function formatDms(value: string | undefined) {
-  return value?.replace(/\\s+/g, " ").trim() ?? ""
+  return value?.replace(/\s+/g, " ").trim() ?? ""
 }
 
 export function parseDistance(value: string) {
@@ -126,11 +126,11 @@ export function normalizeMemorialLine(value: string) {
 }
 
 export function parseDatum(value: string) {
-  return value.match(/SIRGAS\\s*2000|WGS\\s*84/i)?.[0]
+  return value.match(/SIRGAS\s*2000|WGS\s*84/i)?.[0]
 }
 
 export function parseUtmZone(value: string) {
-  const match = value.match(/(?:zona|fuso)\\s*(?:utm)?\\s*[:=]?\\s*(\\d{1,2})/i)
+  const match = value.match(/(?:zona|fuso)\s*(?:utm)?\s*[:=]?\s*(\d{1,2})/i)
   return match ? Number(match[1]) : undefined
 }
 
@@ -180,7 +180,7 @@ export function getConfidenceSummary(result: MemorialParseResult) {
 }
 
 export function isSupportedDatum(value: string | undefined) {
-  return Boolean(value && /SIRGAS\\s*2000|WGS\\s*84/i.test(value))
+  return Boolean(value && /SIRGAS\s*2000|WGS\s*84/i.test(value))
 }
 
 export function clampConfidence(value: Confidence): Confidence {
