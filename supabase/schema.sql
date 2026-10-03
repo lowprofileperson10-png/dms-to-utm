@@ -18,6 +18,60 @@ create table if not exists public.projects (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 create index if not exists projects_user_idx on public.projects (user_id, created_at desc);
+alter table public.projects add column if not exists epsg integer;
+alter table public.projects add column if not exists utm_hemisphere text check (utm_hemisphere in ('S','N'));
+alter table public.projects add column if not exists closure_error_m numeric;
+alter table public.projects add column if not exists error_code text;
+
+create table if not exists public.project_vertices (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  seq integer not null,
+  code text not null,
+  lon_dms text,
+  lat_dms text,
+  lon_dec double precision,
+  lat_dec double precision,
+  altitude_m double precision,
+  vante_code text,
+  azimuth_dms text,
+  distance_m double precision,
+  confrontacao text,
+  easting double precision,
+  northing double precision,
+  edited boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, seq),
+  unique (project_id, code)
+);
+create index if not exists project_vertices_project_idx on public.project_vertices(project_id, seq);
+
+create table if not exists public.project_files (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  kind text not null check (kind in ('memorial_pdf','source_dxf','export_xlsx','export_dxf')),
+  storage_path text not null,
+  original_filename text,
+  mime_type text,
+  size_bytes bigint,
+  created_at timestamptz not null default now(),
+  unique(project_id, kind)
+);
+create index if not exists project_files_project_idx on public.project_files(project_id, created_at desc);
+
+create table if not exists public.processing_jobs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  status text not null default 'queued' check (status in ('queued','processing','ready','error')),
+  error_code text,
+  error_message text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists processing_jobs_project_idx on public.processing_jobs(project_id, created_at desc);
+
 create table if not exists public.usage (user_id text not null, month date not null, memorials_used int not null default 0, primary key (user_id, month));
 create table if not exists public.subscriptions (
   id uuid primary key default gen_random_uuid(), user_id text not null, provider text not null check (provider in ('stripe','asaas','paddle')),

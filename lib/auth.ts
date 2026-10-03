@@ -1,6 +1,6 @@
 import "server-only"
 
-process.env.CLERK_SECRET_KEY ??= process.env.CLERK_SECRET_KEY_2
+process.env.CLERK_SECRET_KEY ??= process.env.CLERK_SECRET_KEY_3 ?? process.env.CLERK_SECRET_KEY_2
 
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"

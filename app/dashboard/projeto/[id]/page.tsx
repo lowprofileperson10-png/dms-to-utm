@@ -41,6 +41,7 @@ export default async function ProjetoPage({ params }: { params: Promise<{ id: st
         </p>
       </div>
       <ProjectView
+        projectId={project.id}
         initialVertices={Array.isArray(project.vertices) ? (project.vertices as Vertex[]) : []}
         initialZone={project.utm_zone}
         initialDatum={project.datum}
