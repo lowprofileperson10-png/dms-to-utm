@@ -40,7 +40,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-zinc-500">Histórico dos seus memoriais processados.</p>
         </div>
         <Link
-          href={usage.canCreate ? "/dashboard/novo" : "/planos"}
+          href={usage.canCreate ? "/dashboard/novo" : "/dashboard/planos"}
           className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-200 transition-colors"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
