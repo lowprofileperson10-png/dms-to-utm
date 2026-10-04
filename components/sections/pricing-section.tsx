@@ -1,5 +1,6 @@
 import { Check } from "lucide-react"
 import Link from "next/link"
+import BorderGlow from "@/components/BorderGlow"
 
 const plans = [
   {
@@ -44,12 +45,16 @@ export function PricingSection({ headingLevel = "h2" }: { headingLevel?: "h1" | 
         {/* Pricing Grid */}
         <div className="grid md:grid-cols-2 gap-6">
           {plans.map((plan) => (
-            <div
+            <BorderGlow
               key={plan.name}
-              className={`p-8 rounded-2xl border flex flex-col h-full ${
-                plan.highlighted ? "bg-zinc-100 border-zinc-100" : "bg-zinc-900/50 border-zinc-800/50"
-              }`}
+              className="h-full"
+              backgroundColor={plan.highlighted ? "#f4f4f5" : "#18181b"}
+              borderRadius={24}
+              glowRadius={36}
+              glowIntensity={1.15}
+              colors={plan.highlighted ? ["#f59e0b", "#fb7185", "#a78bfa"] : ["#38bdf8", "#818cf8", "#c084fc"]}
             >
+            <div className="flex h-full flex-col p-8">
               {/* Plan Header */}
               <div className="mb-6">
                 <h3
@@ -94,6 +99,7 @@ export function PricingSection({ headingLevel = "h2" }: { headingLevel?: "h1" | 
                 {plan.cta}
               </Link>
             </div>
+            </BorderGlow>
           ))}
         </div>
       </div>
