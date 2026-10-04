@@ -2,8 +2,6 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Manrope } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
-import { ClerkProvider } from "@clerk/nextjs"
-import { ptBR } from "@clerk/localizations"
 import { LenisProvider } from "@/components/providers/lenis-provider"
 import "./globals.css"
 
@@ -73,25 +71,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${manrope.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
-        <ClerkProvider
-          localization={ptBR}
-          appearance={{
-            variables: {
-              colorPrimary: "#f4f4f5",
-              colorPrimaryForeground: "#18181b",
-              colorBackground: "#18181b",
-              colorForeground: "#f4f4f5",
-              colorMutedForeground: "#a1a1aa",
-              colorInput: "#27272a",
-              colorInputForeground: "#f4f4f5",
-              colorNeutral: "#f4f4f5",
-              borderRadius: "0.75rem",
-              fontFamily: "var(--font-manrope), sans-serif",
-            },
-          }}
-        >
-          <AppContent>{children}</AppContent>
-        </ClerkProvider>
+        <AppContent>{children}</AppContent>
       </body>
     </html>
   )

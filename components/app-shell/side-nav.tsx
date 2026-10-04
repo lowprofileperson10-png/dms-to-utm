@@ -23,7 +23,7 @@ const navItems: Record<"dashboard" | "admin", NavItem[]> = {
   dashboard: [
     { href: "/dashboard", label: "Projetos", icon: FolderOpen, exact: true },
     { href: "/dashboard/novo", label: "Novo projeto", icon: FilePlus2 },
-    { href: "/planos", label: "Planos", icon: CreditCard },
+    { href: "/dashboard/planos", label: "Planos", icon: CreditCard },
   ],
   admin: [
     { href: "/admin", label: "Visão geral", icon: LayoutDashboard, exact: true },
