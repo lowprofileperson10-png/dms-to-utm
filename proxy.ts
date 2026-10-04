@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server"
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 
-export default function proxy() {
-  return NextResponse.next()
-}
+const isPublicRoute = createRouteMatcher(["/api/webhooks(.*)"])
+
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) await auth.protect()
+})
 
 export const config = {
   matcher: [
