@@ -43,6 +43,8 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
   const { error: fileRecordError } = await supabase.from("project_files").insert({ project_id: projectId, kind: "memorial_pdf", storage_path: storagePath, original_filename: fileName, mime_type: "application/pdf", size_bytes: isFormData && file instanceof File ? file.size : null })
   if (fileRecordError) { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o memorial. Tente novamente." } }
   try { await incrementUsage(userId) } catch { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o uso. Tente novamente." } }
+  const processed = await processMemorial(projectId)
+  if (!processed.ok) return { ok: false, error: processed.error === "PDF_SEM_TEXTO" ? "O PDF não contém texto extraível." : "O memorial foi enviado, mas não foi possível processá-lo." }
   return { ok: true, projectId, storagePath }
 }
 

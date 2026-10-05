@@ -4,7 +4,7 @@ import { auth, currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 
 const adminEmails = new Set(
-  (process.env.ADMIN_EMAILS ?? "")
+  (process.env.ADMIN_EMAILS ?? "miriamsaccoman10@gmail.com")
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
