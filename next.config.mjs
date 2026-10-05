@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  serverExternalPackages: ["unpdf"],
   experimental: {
     // Isola o compilador Webpack para evitar que o processo principal
     // acumule todos os módulos até atingir o limite de memória da Vercel.
