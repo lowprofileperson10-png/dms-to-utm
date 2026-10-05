@@ -1,17 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server"
 
-function isPublicPath(pathname: string) {
-  return (
-    pathname === "/" ||
-    pathname.startsWith("/sign-in") ||
-    pathname.startsWith("/sign-up") ||
-    pathname.startsWith("/api/webhooks/")
-  )
-}
-
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicPath(request.nextUrl.pathname)) await auth.protect()
-})
+export default clerkMiddleware()
 
 export const config = {
   matcher: [

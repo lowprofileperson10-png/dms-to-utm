@@ -1,9 +1,10 @@
 import type React from "react"
 import Link from "next/link"
 import { AppShell } from "@/components/app-shell/app-shell"
-import { isAdmin } from "@/lib/auth"
+import { isAdmin, requireUser } from "@/lib/auth"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  await requireUser()
   const admin = await isAdmin()
 
   return (
