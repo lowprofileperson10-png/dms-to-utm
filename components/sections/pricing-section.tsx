@@ -20,7 +20,7 @@ const plans = [
     period: "/mês",
     features: ["Memoriais ilimitados", "Suporte prioritário", "Histórico completo"],
     cta: "Assinar Pro",
-    href: "/planos",
+    href: "/dashboard/planos",
     highlighted: true,
   },
 ]

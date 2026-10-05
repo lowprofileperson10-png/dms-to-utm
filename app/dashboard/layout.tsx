@@ -12,7 +12,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       variant="dashboard"
       sidebarFooter={
         admin ? (
-          <Link href="/admin" className="flex items-center justify-center rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100">
+          <Link
+            href="/admin"
+            aria-label="Abrir seção administrativa"
+            className="flex items-center justify-center rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100"
+          >
             Seção administrativa
           </Link>
         ) : null
