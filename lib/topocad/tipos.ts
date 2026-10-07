@@ -1,7 +1,11 @@
 export type CodigoErro =
   | "PDF_SEM_TEXTO"
   | "NENHUM_VERTICE"
-  | "FUSO_NAO_SUPORTADO";
+  | "FUSO_NAO_SUPORTADO"
+  | "DATUM_NAO_SUPORTADO"
+  | "CRS_NAO_SUPORTADO"
+  | "PARAMETROS_INCOMPATIVEIS"
+  | "COORDENADA_INVALIDA";
 
 export type CodigoAviso =
   | "POLIGONO_ABERTO"
@@ -9,7 +13,9 @@ export type CodigoAviso =
   | "MULTIPLOS_FUSOS"
   | "LINHA_NAO_RECONHECIDA"
   | "DIVERGENCIA_DISTANCIA"
-  | "POUCOS_VERTICES";
+  | "POUCOS_VERTICES"
+  | "DATUM_NAO_IDENTIFICADO"
+  | "FUSO_DECLARADO_DIFERENTE";
 
 export interface Aviso {
   codigo: CodigoAviso;
