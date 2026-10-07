@@ -45,7 +45,7 @@ function localizarFuso(textoNormalizado: string) {
   const linhas = textoNormalizado.split(/\r?\n/)
   const padroes = [
     /\b(?:FUSO|ZONA)\s*(?:UTM\s*)?[:=]?\s*(\d{1,2})\s*(?:°\s*)?(NORTE|SUL|N|S)?\b/,
-    /\bUTM\s*(?:ZONA|ZONE)?\s*[:=]?\s*(\d{1,2})\s*(?:°\s*)?(NORTE|SUL|N|S)\b/,
+    /\bUTM\s*(?:ZONA|ZONE)?\s*[:=]?\s*(\d{1,2})\s*(?:°\s*)?(NORTE|SUL|N|S)?\b/,
   ]
 
   for (const linha of linhas) {
@@ -75,6 +75,7 @@ export function detectarParametrosMemorial(texto: string): ResultadoDeteccaoPara
   const epsg = epsgMatch ? Number(epsgMatch[1]) : undefined
   const referenciaEpsg = epsg === undefined ? undefined : referenciaDoEpsg(epsg)
   const datumDeclarado = detectarDatum(normalizado)
+  const datumDoEpsg = epsg === 4674 ? "SIRGAS 2000" : referenciaEpsg?.datum
 
   if (epsg !== undefined && epsg !== 4674 && !referenciaEpsg) {
     return falha(
@@ -90,14 +91,14 @@ export function detectarParametrosMemorial(texto: string): ResultadoDeteccaoPara
     )
   }
 
-  if (referenciaEpsg && referenciaEpsg.datum !== "SIRGAS 2000") {
+  if (datumDoEpsg && datumDoEpsg !== "SIRGAS 2000") {
     return falha(
       "DATUM_NAO_SUPORTADO",
-      `O EPSG:${epsg} usa o datum ${referenciaEpsg.datum}. A conversão precisa de uma transformação geodésica validada para SIRGAS 2000.`,
+      `O EPSG:${epsg} usa o datum ${datumDoEpsg}. A conversão precisa de uma transformação geodésica validada para SIRGAS 2000.`,
     )
   }
 
-  if (referenciaEpsg && datumDeclarado && referenciaEpsg.datum !== datumDeclarado) {
+  if (datumDoEpsg && datumDeclarado && datumDoEpsg !== datumDeclarado) {
     return falha(
       "PARAMETROS_INCOMPATIVEIS",
       `O datum declarado (${datumDeclarado}) não corresponde ao EPSG:${epsg}. Confira os parâmetros do memorial antes de converter.`,
@@ -120,7 +121,7 @@ export function detectarParametrosMemorial(texto: string): ResultadoDeteccaoPara
   }
 
   const referencia = referenciaEpsg ?? fusoTexto
-  if (!datumDeclarado && !referenciaEpsg) {
+  if (!datumDeclarado && !datumDoEpsg) {
     avisos.push({
       codigo: "DATUM_NAO_IDENTIFICADO",
       mensagem: "O datum não aparece no memorial; foi adotado SIRGAS 2000, padrão do fluxo SIGEF.",

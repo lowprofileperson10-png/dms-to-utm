@@ -1,3 +1,4 @@
+import proj4 from "proj4";
 import type { Crs } from "./tipos";
 
 /** Elipsoide GRS80 (SIRGAS 2000). */
@@ -9,7 +10,7 @@ const N0_SUL = 10000000;
 
 /** Mesma regra do script: fuso = floor((lon + 180) / 6) + 1. */
 export function fusoUtm(lon: number): number {
-  return Math.floor((lon + 180) / 6) + 1;
+  return Math.min(60, Math.max(1, Math.floor((lon + 180) / 6) + 1));
 }
 
 /** Igual ao descobrir_epsg_utm do script (SIRGAS 2000 / UTM: 31954+fuso Norte, 31960+fuso Sul). */
@@ -65,6 +66,38 @@ export function geograficasParaUtm(lon: number, lat: number, fuso: number, sul: 
     este: E0 + K0 * A * eta,
     norte: (sul ? N0_SUL : 0) + K0 * A * xi,
   };
+}
+
+/** Converte coordenadas UTM SIRGAS 2000 / GRS80 para longitude e latitude. */
+export function utmParaGeograficas(
+  este: number,
+  norte: number,
+  fuso: number,
+  hemisferio: "S" | "N",
+): { lon: number; lat: number } {
+  if (
+    !Number.isFinite(este) ||
+    !Number.isFinite(norte) ||
+    !Number.isInteger(fuso) ||
+    fuso < 1 ||
+    fuso > 60 ||
+    este < 100_000 ||
+    este > 900_000 ||
+    norte < 0 ||
+    norte > 10_000_000
+  ) {
+    throw new Error("Coordenadas UTM inválidas.");
+  }
+
+  const utm = `+proj=utm +zone=${fuso}${hemisferio === "S" ? " +south" : ""} +ellps=GRS80 +units=m +no_defs +type=crs`;
+  const geografico = "+proj=longlat +ellps=GRS80 +no_defs +type=crs";
+  const [lon, lat] = proj4(utm, geografico, [este, norte]);
+
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+    throw new Error("Não foi possível transformar as coordenadas UTM.");
+  }
+
+  return { lon, lat };
 }
 
 /** Arredonda a 3 casas, como o round(x, 3) do script. */

@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { ClerkProvider } from "@clerk/nextjs"
 import { clerkPublishableKey } from "@/lib/clerk-env"
 import { LenisProvider } from "@/components/providers/lenis-provider"
+import "leaflet/dist/leaflet.css"
 import "./globals.css"
 
 const manrope = Manrope({

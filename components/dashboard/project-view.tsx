@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import { Download, Map as MapIcon, Plus, Save, Trash2 } from "lucide-react"
 import { saveProjectVertices } from "@/app/dashboard/novo/actions"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
@@ -11,34 +12,33 @@ import { formatArea, formatLength } from "@/lib/format"
 
 export type Vertex = Vertice
 
+const ProjectMap = dynamic(
+  () => import("./project-map").then((module) => module.ProjectMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[420px] w-full items-center justify-center rounded-lg bg-zinc-900" role="status">
+        <MapIcon className="size-8 text-zinc-500" aria-hidden="true" />
+        <span className="sr-only">Carregando mapa dos vértices</span>
+      </div>
+    ),
+  },
+)
+
 function computeMetrics(vertices: Vertex[]) {
   return vertices.length < 3 ? null : recalcularGeometria(vertices).geometria
 }
 
-function PolygonPreview({ points }: { points: Pick<Vertex, "este" | "norte">[] }) {
-  const minE = Math.min(...points.map((point) => point.este))
-  const maxE = Math.max(...points.map((point) => point.este))
-  const minN = Math.min(...points.map((point) => point.norte))
-  const maxN = Math.max(...points.map((point) => point.norte))
-  const span = Math.max(maxE - minE, maxN - minN) || 1
-  const padding = 20
-  const size = 400
-  const scale = (size - padding * 2) / span
-  const toXY = (point: Pick<Vertex, "este" | "norte">) => [
-    padding + (point.este - minE) * scale,
-    size - padding - (point.norte - minN) * scale,
-  ]
-  const path = points.map((point) => toXY(point).join(",")).join(" ")
+function projectCrs(utmZone: string | null) {
+  const match = utmZone?.trim().match(/^(\d{1,2})\s*([NS])?$/i)
+  const zone = match ? Number(match[1]) : Number.NaN
+  if (!Number.isInteger(zone) || zone < 1 || zone > 60) return null
 
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Pré-visualização do polígono" className="max-h-[420px] w-full">
-      <polygon points={path} className="fill-zinc-100/10 stroke-zinc-100" strokeWidth={1.5} />
-      {points.map((point, index) => {
-        const [x, y] = toXY(point)
-        return <circle key={`${point.este}-${point.norte}-${index}`} cx={x} cy={y} r={3} className="fill-zinc-100" />
-      })}
-    </svg>
-  )
+  const hemisphere = (match?.[2]?.toUpperCase() as "S" | "N" | undefined) ?? "S"
+  return {
+    hemisphere,
+    epsg: hemisphere === "S" ? 31960 + zone : 31954 + zone,
+  }
 }
 
 export function ProjectView({
@@ -53,6 +53,7 @@ export function ProjectView({
   initialDatum: string | null
 }) {
   const [vertices, setVertices] = useState(initialVertices)
+  const crs = useMemo(() => projectCrs(initialZone), [initialZone])
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const metrics = useMemo(() => computeMetrics(vertices), [vertices])
@@ -228,17 +229,30 @@ export function ProjectView({
 
         <DashboardCard className="h-fit">
           <aside className="flex flex-col gap-4 p-5">
-            <h2 className="text-sm font-medium text-zinc-300">Parâmetros</h2>
+            <div>
+              <h2 className="text-sm font-medium text-zinc-300">Parâmetros selecionados</h2>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Extraídos do memorial; quando ausentes, o fuso é inferido pelas coordenadas.
+              </p>
+            </div>
             <dl className="flex flex-col gap-4 text-sm">
               <div>
                 <dt className="text-zinc-500">Fuso UTM</dt>
                 <dd className="mt-1 font-medium text-zinc-200">{initialZone ?? "—"}</dd>
               </div>
               <div>
+                <dt className="text-zinc-500">Hemisfério</dt>
+                <dd className="mt-1 font-medium text-zinc-200">{crs?.hemisphere ?? "—"}</dd>
+              </div>
+              <div>
                 <dt className="text-zinc-500">Datum</dt>
                 <dd className="mt-1 font-medium text-zinc-200">
                   {initialDatum?.replace(/^SIRGAS\s*2000$/i, "SIRGAS 2000") ?? "—"}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">EPSG</dt>
+                <dd className="mt-1 font-medium text-zinc-200">{crs?.epsg ?? "—"}</dd>
               </div>
             </dl>
           </aside>
@@ -258,12 +272,17 @@ export function ProjectView({
         </div>
         <DashboardCard>
           <div className="flex min-h-[320px] items-center justify-center p-6">
-            {metrics ? (
-              <PolygonPreview points={vertices} />
+            {vertices.length > 0 ? (
+              <ProjectMap
+                vertices={vertices}
+                utmZone={initialZone}
+                hemisphere={crs?.hemisphere ?? null}
+                datum={initialDatum}
+              />
             ) : (
               <div className="text-center">
-                <MapIcon className="mx-auto h-8 w-8 text-zinc-600" aria-hidden="true" />
-                <p className="mt-3 text-sm text-zinc-500">A pré-visualização aparece quando o memorial tiver ao menos 3 vértices.</p>
+                <MapIcon className="mx-auto size-8 text-zinc-600" aria-hidden="true" />
+                <p className="mt-3 text-sm text-zinc-500">O mapa aparecerá quando o memorial tiver vértices convertidos.</p>
               </div>
             )}
           </div>
