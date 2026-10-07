@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
-import BorderGlow from "@/components/BorderGlow"
+import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import type { UsageStatus } from "@/lib/usage"
 
 export function UsageCard({ usage }: { usage: UsageStatus }) {
@@ -8,14 +8,7 @@ export function UsageCard({ usage }: { usage: UsageStatus }) {
   const percent = usage.limit ? Math.min(100, (usage.used / usage.limit) * 100) : 0
 
   return (
-    <BorderGlow
-      className="w-full max-w-sm"
-      backgroundColor="#18181b"
-      borderRadius={16}
-      glowRadius={32}
-      glowIntensity={1.2}
-      colors={["#38bdf8", "#818cf8", "#c084fc"]}
-    >
+    <DashboardCard className="w-full max-w-sm" borderRadius={16} glowIntensity={1.2}>
       <section aria-labelledby="usage-title" className="w-full p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 id="usage-title" className="text-sm font-medium text-zinc-400">Uso do mês</h2>
@@ -42,6 +35,6 @@ export function UsageCard({ usage }: { usage: UsageStatus }) {
           </>
         )}
       </section>
-    </BorderGlow>
+    </DashboardCard>
   )
 }

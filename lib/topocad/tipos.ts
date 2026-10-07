@@ -1,7 +1,11 @@
 export type CodigoErro =
   | "PDF_SEM_TEXTO"
   | "NENHUM_VERTICE"
-  | "FUSO_NAO_SUPORTADO";
+  | "FUSO_NAO_SUPORTADO"
+  | "DATUM_NAO_SUPORTADO"
+  | "CRS_NAO_SUPORTADO"
+  | "PARAMETROS_INCOMPATIVEIS"
+  | "COORDENADA_INVALIDA";
 
 export type CodigoAviso =
   | "POLIGONO_ABERTO"
@@ -9,7 +13,9 @@ export type CodigoAviso =
   | "MULTIPLOS_FUSOS"
   | "LINHA_NAO_RECONHECIDA"
   | "DIVERGENCIA_DISTANCIA"
-  | "POUCOS_VERTICES";
+  | "POUCOS_VERTICES"
+  | "DATUM_NAO_IDENTIFICADO"
+  | "FUSO_DECLARADO_DIFERENTE";
 
 export interface Aviso {
   codigo: CodigoAviso;
@@ -71,6 +77,10 @@ export interface Geometria {
 export interface OpcoesMotor {
   /** Limite (m) acima do qual gera DIVERGENCIA_DISTANCIA. Padrão 0.1. */
   limiteDivergenciaM?: number;
+  /** Fuso declarado no memorial; quando ausente, é inferido pelas coordenadas. */
+  fusoDeclarado?: number;
+  /** Hemisfério declarado no memorial; quando ausente, é inferido pelas coordenadas. */
+  hemisferioDeclarado?: "S" | "N";
   /** Fusos aceitos (hemisfério Sul). Padrão 18 a 25. */
   fusoMin?: number;
   fusoMax?: number;

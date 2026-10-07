@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getUsageStatus, incrementUsage } from "@/lib/usage"
 import { processMemorial } from "@/lib/engine"
+import { recalcularGeometria, type Vertice } from "@/lib/topocad"
+import { verticeParaLinha } from "@/lib/topocad-db/mapeamento"
 import { z } from "zod"
 
 const MAX_SIZE = 10 * 1024 * 1024
@@ -43,8 +45,7 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
   const { error: fileRecordError } = await supabase.from("project_files").insert({ project_id: projectId, kind: "memorial_pdf", storage_path: storagePath, original_filename: fileName, mime_type: "application/pdf", size_bytes: isFormData && file instanceof File ? file.size : null })
   if (fileRecordError) { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o memorial. Tente novamente." } }
   try { await incrementUsage(userId) } catch { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o uso. Tente novamente." } }
-  const processed = await processMemorial(projectId)
-  if (!processed.ok) return { ok: false, error: processed.error === "PDF_SEM_TEXTO" ? "O PDF não contém texto extraível." : "O memorial foi enviado, mas não foi possível processá-lo." }
+  await processMemorial(projectId, userId)
   return { ok: true, projectId, storagePath }
 }
 
@@ -60,22 +61,34 @@ export async function retryProject(projectId: string) {
   const supabase = createAdminClient()
   const { data } = await supabase.from("projects").select("id").eq("id", projectId).eq("user_id", userId).maybeSingle()
   if (!data) return { ok: false as const, error: "Projeto não encontrado." }
-  return processMemorial(projectId)
+  return processMemorial(projectId, userId)
 }
 
 const vertexSchema = z.object({
-  id: z.string().trim().min(1).max(40),
-  e: z.number().finite().nullable(),
-  n: z.number().finite().nullable(),
-  azimuth: z.string().max(80).nullable().optional(),
-  distance: z.number().finite().nonnegative().nullable().optional(),
+  seq: z.number().int().positive(),
+  codigo: z.string().trim().min(1).max(80),
+  lonDms: z.string().max(80),
+  latDms: z.string().max(80),
+  lon: z.number().finite(),
+  lat: z.number().finite(),
+  altitude: z.number().finite().nullable(),
+  vante: z.string().trim().min(1).max(80),
+  azimuteDms: z.string().max(80),
+  distancia: z.number().finite().nonnegative(),
+  confrontacao: z.string().max(1000),
+  este: z.number().finite(),
+  norte: z.number().finite(),
+  editado: z.boolean(),
 })
 
 const saveVerticesSchema = z.object({
   projectId: z.string().uuid(),
-  zone: z.string().regex(/^(1[89]|2[0-5])S$/),
-  datum: z.literal("SIRGAS2000"),
   vertices: z.array(vertexSchema).max(500),
+}).superRefine(({ vertices }, context) => {
+  const codes = new Set(vertices.map((vertex) => vertex.codigo))
+  if (codes.size !== vertices.length) {
+    context.addIssue({ code: "custom", path: ["vertices"], message: "Os códigos dos vértices precisam ser únicos." })
+  }
 })
 
 export async function saveProjectVertices(input: unknown) {
@@ -84,14 +97,52 @@ export async function saveProjectVertices(input: unknown) {
   if (!parsed.success) return { ok: false as const, error: "Confira os dados dos vértices e tente novamente." }
 
   const supabase = createAdminClient()
-  const { data: project } = await supabase.from("projects").select("id").eq("id", parsed.data.projectId).eq("user_id", userId).maybeSingle()
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", parsed.data.projectId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
   if (!project) return { ok: false as const, error: "Projeto não encontrado." }
 
-  const { error } = await supabase.from("projects").update({
-    vertices: parsed.data.vertices,
-    utm_zone: parsed.data.zone,
-    datum: parsed.data.datum,
-  }).eq("id", parsed.data.projectId).eq("user_id", userId)
-  if (error) return { ok: false as const, error: "Não foi possível salvar os vértices." }
+  const vertices: Vertice[] = parsed.data.vertices.map((vertex, index) => ({ ...vertex, seq: index + 1 }))
+  const rows = vertices.map((vertex) => verticeParaLinha(parsed.data.projectId, vertex))
+  const { geometria } = recalcularGeometria(vertices)
+
+  const { error: deleteError } = await supabase
+    .from("project_vertices")
+    .delete()
+    .eq("project_id", parsed.data.projectId)
+
+  if (deleteError) return { ok: false as const, error: "Não foi possível atualizar os vértices." }
+
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase.from("project_vertices").insert(rows)
+    if (insertError) return { ok: false as const, error: "Não foi possível atualizar os vértices." }
+  }
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({
+      vertices: vertices.map((vertex) => ({
+        id: vertex.codigo,
+        e: vertex.este,
+        n: vertex.norte,
+        azimuth: vertex.azimuteDms,
+        distance: vertex.distancia,
+      })),
+      area_m2: geometria.areaM2,
+      perimeter_m: geometria.perimetroGradeM,
+      closure_error_m: geometria.divergenciaMaxDistanciaM,
+      is_closed: geometria.poligonoFechado,
+      status: vertices.length >= 3 ? "ready" : "draft",
+      error_code: null,
+      error_message: null,
+    })
+    .eq("id", parsed.data.projectId)
+    .eq("user_id", userId)
+
+  if (updateError) return { ok: false as const, error: "Não foi possível salvar as alterações do projeto." }
   return { ok: true as const }
 }

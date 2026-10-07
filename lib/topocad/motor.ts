@@ -4,6 +4,7 @@ import { reconstruirLinhas } from "./texto";
 import { arredondar3, descobrirEpsgUtm, fusoUtm, geograficasParaUtm, montarCrs } from "./utm";
 import { calcularGeometria } from "./geometria";
 import { distanciaGeodesica } from "./geodesia";
+import { avisoFusoDiferente, detectarParametrosMemorial } from "./detectar-parametros";
 
 /**
  * Vértice digitado à mão (ou vindo de outra fonte): só código, lon e lat (graus decimais) são obrigatórios.
@@ -19,7 +20,13 @@ export function processarVertices(
   opcoes: OpcoesMotor = {},
   avisosIniciais: Aviso[] = [],
 ): ResultadoMotor {
-  const { limiteDivergenciaM = 0.1, fusoMin = 18, fusoMax = 25 } = opcoes;
+  const {
+    limiteDivergenciaM = 0.1,
+    fusoDeclarado,
+    hemisferioDeclarado,
+    fusoMin = 18,
+    fusoMax = 25,
+  } = opcoes;
 
   if (entrada.length === 0) {
     return {
@@ -50,22 +57,82 @@ export function processarVertices(
     };
   });
 
-  // Fuso pela média de lon/lat, como o script.
-  const lonMedia = brutos.reduce((s, v) => s + v.lon, 0) / n;
-  const latMedia = brutos.reduce((s, v) => s + v.lat, 0) / n;
-  const { epsg, fuso, hemisferio } = descobrirEpsgUtm(lonMedia, latMedia);
-
-  if (hemisferio !== "S" || fuso < fusoMin || fuso > fusoMax) {
+  const coordenadaInvalida = brutos.some(
+    (vertice) =>
+      !Number.isFinite(vertice.lon) ||
+      !Number.isFinite(vertice.lat) ||
+      vertice.lon < -180 ||
+      vertice.lon > 180 ||
+      vertice.lat < -80 ||
+      vertice.lat > 84,
+  );
+  if (coordenadaInvalida) {
     return {
       ok: false,
       avisos: avisosIniciais,
-      erro: { codigo: "FUSO_NAO_SUPORTADO", mensagem: `Fuso fora da faixa suportada (${fusoMin}S a ${fusoMax}S).` },
+      erro: {
+        codigo: "COORDENADA_INVALIDA",
+        mensagem: "O memorial contém longitude ou latitude inválida para uma projeção UTM.",
+      },
+    };
+  }
+
+  const lonMedia = brutos.reduce((s, v) => s + v.lon, 0) / n;
+  const latMedia = brutos.reduce((s, v) => s + v.lat, 0) / n;
+  const referenciaCalculada = descobrirEpsgUtm(lonMedia, latMedia);
+  const hemisferiosDosVertices = new Set(
+    brutos.filter((vertice) => vertice.lat !== 0).map((vertice) => (vertice.lat < 0 ? "S" : "N")),
+  );
+
+  if (hemisferiosDosVertices.size > 1) {
+    return {
+      ok: false,
+      avisos: avisosIniciais,
+      erro: {
+        codigo: "COORDENADA_INVALIDA",
+        mensagem: "Os vértices estão em hemisférios diferentes; não é seguro projetar o polígono em uma única zona UTM.",
+      },
+    };
+  }
+
+  const fuso = fusoDeclarado ?? referenciaCalculada.fuso;
+  const hemisferio = hemisferioDeclarado ?? referenciaCalculada.hemisferio;
+  const epsg = hemisferio === "S" ? 31960 + fuso : 31954 + fuso;
+
+  if (hemisferiosDosVertices.size === 1 && hemisferiosDosVertices.has(hemisferio === "S" ? "N" : "S")) {
+    return {
+      ok: false,
+      avisos: avisosIniciais,
+      erro: {
+        codigo: "PARAMETROS_INCOMPATIVEIS",
+        mensagem: `O hemisfério ${hemisferio} declarado no memorial não corresponde ao sinal das coordenadas.`,
+      },
+    };
+  }
+
+  if (hemisferio !== "S" || !Number.isInteger(fuso) || fuso < fusoMin || fuso > fusoMax) {
+    return {
+      ok: false,
+      avisos: avisosIniciais,
+      erro: {
+        codigo: "FUSO_NAO_SUPORTADO",
+        mensagem:
+          hemisferio !== "S"
+            ? "A conversão deste memorial aceita apenas coordenadas no hemisfério Sul."
+            : `Fuso ${fuso}${hemisferio} fora da faixa suportada (${fusoMin}S a ${fusoMax}S).`,
+      },
     };
   }
 
   const avisos: Aviso[] = [...avisosIniciais];
+  if (fusoDeclarado !== undefined && fusoDeclarado !== referenciaCalculada.fuso) {
+    avisos.push(avisoFusoDiferente(fusoDeclarado, referenciaCalculada.fuso));
+  }
   if (new Set(brutos.map((v) => fusoUtm(v.lon))).size > 1) {
-    avisos.push({ codigo: "MULTIPLOS_FUSOS", mensagem: `Vértices em mais de um fuso; usado o fuso ${fuso}${hemisferio} (pela média).` });
+    avisos.push({
+      codigo: "MULTIPLOS_FUSOS",
+      mensagem: `Vértices em mais de um fuso; usado o fuso ${fuso}${hemisferio}${fusoDeclarado ? " (declarado no memorial)" : " (pela média)"}.`,
+    });
   }
 
   const vertices: Vertice[] = brutos.map((v) => {
@@ -86,8 +153,21 @@ export function processarTexto(texto: string, opcoes: OpcoesMotor = {}): Resulta
       erro: { codigo: "PDF_SEM_TEXTO", mensagem: "Este PDF parece ser uma imagem. Envie o memorial original gerado pelo SIGEF." },
     };
   }
+  const parametros = detectarParametrosMemorial(texto);
+  if (!parametros.ok) {
+    return { ok: false, erro: parametros.erro, avisos: parametros.avisos };
+  }
+
   const { vertices, avisos } = extrairVertices(texto);
-  return processarVertices(vertices, opcoes, avisos);
+  return processarVertices(
+    vertices,
+    {
+      ...opcoes,
+      fusoDeclarado: opcoes.fusoDeclarado ?? parametros.parametros.fusoDeclarado,
+      hemisferioDeclarado: opcoes.hemisferioDeclarado ?? parametros.parametros.hemisferioDeclarado,
+    },
+    [...parametros.avisos, ...avisos],
+  );
 }
 
 /** Pipeline a partir dos itens de texto de cada página (unpdf / pdfjs-dist). */

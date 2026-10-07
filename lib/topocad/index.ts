@@ -1,5 +1,6 @@
 export * from "./tipos";
 export * from "./texto";
+export * from "./detectar-parametros";
 export * from "./parser";
 export * from "./utm";
 export * from "./geodesia";
