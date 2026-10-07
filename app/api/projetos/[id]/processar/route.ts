@@ -1,10 +1,32 @@
 import { createAdminClient } from "@/lib/supabase/server"
-import { extrairItensDoPdf, ErroApp } from "@/lib/pdf/extrair-itens"
-import { processarPaginas } from "@/lib/topocad"
+import { processMemorial } from "@/lib/engine"
 import { erroApi, identidadeApi } from "@/lib/api/projetos"
-import { projetoDoResultado, verticeParaLinha } from "@/lib/topocad-db/mapeamento"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) { const userId = await identidadeApi(); if (!userId) return erroApi(401, "NAO_AUTORIZADO", "Entre na sua conta."); const { id } = await params; const db = createAdminClient(); const { data: project } = await db.from("projects").select("id,name,status,source_pdf_path").eq("id", id).eq("user_id", userId).maybeSingle(); if (!project) return erroApi(404, "NAO_ENCONTRADO", "Projeto não encontrado."); if (!project.source_pdf_path) return erroApi(400, "PDF_INVALIDO", "O memorial PDF não foi enviado."); if (!["draft", "error"].includes(project.status)) return erroApi(409, "PROJETO_EM_PROCESSAMENTO", "O projeto não pode ser processado neste estado."); await db.from("projects").update({ status: "processing", error_code: null, error_message: null }).eq("id", id).eq("user_id", userId); try { const downloaded = await db.storage.from("memoriais").download(project.source_pdf_path); if (downloaded.error || !downloaded.data) throw new ErroApp("PDF_INVALIDO", "Não foi possível baixar o memorial PDF."); const bytes = new Uint8Array(await downloaded.data.arrayBuffer()); const paginas = await extrairItensDoPdf(bytes); const result = processarPaginas(paginas); if (!result.ok) { await db.from("projects").update({ status: "error", error_code: result.erro.codigo, error_message: result.erro.mensagem }).eq("id", id); return erroApi(422, result.erro.codigo, result.erro.mensagem) } await db.from("project_vertices").delete().eq("project_id", id); const { error: insertError } = await db.from("project_vertices").insert(result.vertices.map((v) => verticeParaLinha(id, v))); if (insertError) throw new Error("Falha ao salvar os vértices."); const update = projetoDoResultado(result); const { error } = await db.from("projects").update(update).eq("id", id).eq("user_id", userId); if (error) throw new Error("Falha ao salvar o projeto."); return Response.json({ projeto: { ...project, ...update }, vertices: result.vertices, avisos: result.avisos }) } catch (error) { const appError = error instanceof ErroApp ? error : new ErroApp("PDF_INVALIDO", "Não foi possível processar o memorial PDF."); await db.from("projects").update({ status: "error", error_code: appError.codigo, error_message: appError.message }).eq("id", id).eq("user_id", userId); return erroApi(appError.codigo === "PDF_MUITO_GRANDE" ? 413 : 400, appError.codigo, appError.message) } }
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const userId = await identidadeApi()
+  if (!userId) return erroApi(401, "NAO_AUTORIZADO", "Entre na sua conta.")
+
+  const { id } = await params
+  const processed = await processMemorial(id, userId)
+  if (!processed.ok) return erroApi(processed.status, processed.error, processed.message)
+
+  const { data: project, error } = await createAdminClient()
+    .from("projects")
+    .select("id,name,status,datum,epsg,utm_zone,utm_hemisphere,area_m2,perimeter_m,is_closed,error_code,error_message")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error || !project) {
+    return erroApi(500, "ERRO_BANCO", "O memorial foi processado, mas não foi possível carregar o projeto.")
+  }
+
+  return Response.json({
+    projeto: project,
+    vertices: processed.result.vertices,
+    avisos: processed.result.avisos,
+  })
+}

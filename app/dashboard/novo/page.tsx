@@ -21,7 +21,7 @@ export default async function NovoProjetoPage() {
   }
 
   const usage = await getUsageStatus(userId)
-  if (!usage.canCreate) redirect("/planos")
+  if (!usage.canCreate) redirect("/dashboard/planos")
 
   return (
     <div className="space-y-6">

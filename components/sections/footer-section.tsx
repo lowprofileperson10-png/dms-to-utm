@@ -4,7 +4,7 @@ const productLinks = [
   { label: "Recursos", href: "/#recursos" },
   { label: "Como funciona", href: "/#como-funciona" },
   { label: "Preços", href: "/#precos" },
-  { label: "Planos", href: "/planos" },
+  { label: "Planos", href: "/#precos" },
 ]
 
 const legalLinks = [

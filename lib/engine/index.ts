@@ -1,22 +1,157 @@
 import "server-only"
+
 import { createAdminClient } from "@/lib/supabase/server"
-import { parseMemorialPdf } from "./parse-memorial"
-import { parseDms } from "./dms"
-import { convertToUtm } from "./utm"
-import { geometry } from "./geometry"
-export type ProcessResult={ok:boolean;error?:string}
-export async function processMemorial(projectId:string):Promise<ProcessResult>{
- const db=createAdminClient(); const {data:project,error}=await db.from("projects").select("id,source_pdf_path").eq("id",projectId).maybeSingle(); if(error||!project)return {ok:false,error:"Projeto não encontrado."}
- await db.from("projects").update({status:"processing",error_message:null}).eq("id",projectId)
- try { const {data:file,error:downloadError}=await db.storage.from("memoriais").download(project.source_pdf_path); if(downloadError||!file)throw new Error("PDF_SEM_TEXTO")
-  const parsed=await parseMemorialPdf(await file.arrayBuffer()); if(!parsed.ok)throw new Error(parsed.code)
-  const coordinates=parsed.vertices.map(v=>({lon:parseDms(v.longitudeDms??"")??0,lat:parseDms(v.latitudeDms??"")??0})); const utm=convertToUtm(coordinates); if("errorCode" in utm)throw new Error(utm.errorCode)
-  const rows=parsed.vertices.map((v,i)=>({project_id:projectId,seq:i+1,code:v.label,lon_dms:v.longitudeDms??null,lat_dms:v.latitudeDms??null,lon_dec:coordinates[i].lon,lat_dec:coordinates[i].lat,azimuth_dms:v.azimuthDms??null,distance_m:v.distanceM??null,easting:utm.points[i].easting,northing:utm.points[i].northing}))
-  const {error:deleteError}=await db.from("project_vertices").delete().eq("project_id",projectId); if(deleteError)throw deleteError
-  const {error:insertError}=await db.from("project_vertices").insert(rows); if(insertError)throw insertError
-  const geo=geometry(utm.points); const {error:updateError}=await db.from("projects").update({status:"ready",datum:"SIRGAS 2000",epsg:utm.epsg,utm_zone:`${utm.zone}S`,utm_hemisphere:"S",area_m2:geo.areaM2,perimeter_m:geo.perimeterM,error_message:null}).eq("id",projectId); if(updateError)throw updateError
-  return {ok:true}
- } catch(error) { const code=error instanceof Error?error.message:"PROCESSAMENTO_FALHOU"; const messages:Record<string,string>={PDF_SEM_TEXTO:"O PDF não contém texto extraível.",VERTICES_NAO_ENCONTRADOS:"Nenhum vértice foi identificado.",FUSO_NAO_SUPORTADO:"O fuso UTM não é suportado."}; await db.from("projects").update({status:"error",error_message:messages[code]??"Não foi possível processar o memorial."}).eq("id",projectId); return {ok:false,error:code} }
+import { ErroApp, extrairItensDoPdf } from "@/lib/pdf/extrair-itens"
+import { processarPaginas, type ResultadoMotor } from "@/lib/topocad"
+import { projetoDoResultado, verticeParaLinha } from "@/lib/topocad-db/mapeamento"
+
+export type ProcessResult =
+  | { ok: true; result: Extract<ResultadoMotor, { ok: true }> }
+  | { ok: false; error: string; message: string; status: number }
+
+class MemorialProcessingError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status = 422,
+  ) {
+    super(message)
+    this.name = "MemorialProcessingError"
+  }
 }
-export async function processMemorialForUser(projectId:string,userId:string){const {data}=await createAdminClient().from("projects").select("id").eq("id",projectId).eq("user_id",userId).maybeSingle(); return data?processMemorial(projectId):{ok:false,error:"Projeto não encontrado."}}
-export const memorialEngineMessage="O memorial será processado após o upload."
+
+export async function processMemorial(projectId: string, userId: string): Promise<ProcessResult> {
+  const db = createAdminClient()
+  const { data: project, error: projectError } = await db
+    .from("projects")
+    .select("id,source_pdf_path,status")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (projectError) {
+    return { ok: false, error: "ERRO_BANCO", message: "Não foi possível carregar o projeto.", status: 500 }
+  }
+
+  if (!project) {
+    return { ok: false, error: "PROJETO_NAO_ENCONTRADO", message: "Projeto não encontrado.", status: 404 }
+  }
+
+  if (!["draft", "error"].includes(project.status)) {
+    return {
+      ok: false,
+      error: "PROJETO_EM_PROCESSAMENTO",
+      message: "O memorial não pode ser processado neste estado.",
+      status: 409,
+    }
+  }
+
+  if (!project.source_pdf_path) {
+    return {
+      ok: false,
+      error: "PDF_NAO_ENCONTRADO",
+      message: "O arquivo PDF deste memorial não foi encontrado.",
+      status: 400,
+    }
+  }
+
+  const { error: processingError } = await db
+    .from("projects")
+    .update({ status: "processing", error_code: null, error_message: null })
+    .eq("id", projectId)
+    .eq("user_id", userId)
+
+  if (processingError) {
+    return {
+      ok: false,
+      error: "STATUS_UPDATE_FAILED",
+      message: "Não foi possível iniciar o processamento.",
+      status: 500,
+    }
+  }
+
+  try {
+    const { data: file, error: downloadError } = await db.storage
+      .from("memoriais")
+      .download(project.source_pdf_path)
+
+    if (downloadError || !file) {
+      throw new MemorialProcessingError("PDF_INVALIDO", "Não foi possível abrir o PDF enviado.")
+    }
+
+    const pages = await extrairItensDoPdf(new Uint8Array(await file.arrayBuffer()))
+    const result = processarPaginas(pages)
+
+    if (!result.ok) {
+      throw new MemorialProcessingError(result.erro.codigo, result.erro.mensagem)
+    }
+
+    const uniqueCodes = new Set(result.vertices.map((vertex) => vertex.codigo))
+    if (uniqueCodes.size !== result.vertices.length) {
+      throw new MemorialProcessingError(
+        "CODIGO_VERTICE_DUPLICADO",
+        "O memorial contém códigos de vértice repetidos. Revise o arquivo e tente novamente.",
+      )
+    }
+
+    const vertexRows = result.vertices.map((vertex) => verticeParaLinha(projectId, vertex))
+    const { error: deleteError } = await db
+      .from("project_vertices")
+      .delete()
+      .eq("project_id", projectId)
+
+    if (deleteError) {
+      throw new MemorialProcessingError("VERTEX_PERSISTENCE_FAILED", "Não foi possível salvar os vértices do memorial.", 500)
+    }
+
+    const { error: insertError } = await db.from("project_vertices").insert(vertexRows)
+    if (insertError) {
+      throw new MemorialProcessingError("VERTEX_PERSISTENCE_FAILED", "Não foi possível salvar os vértices do memorial.", 500)
+    }
+
+    const { error: updateError } = await db
+      .from("projects")
+      .update({
+        ...projetoDoResultado(result),
+        vertices: result.vertices.map((vertex) => ({
+          id: vertex.codigo,
+          e: vertex.este,
+          n: vertex.norte,
+          azimuth: vertex.azimuteDms,
+          distance: vertex.distancia,
+        })),
+      })
+      .eq("id", projectId)
+      .eq("user_id", userId)
+
+    if (updateError) {
+      throw new MemorialProcessingError("PROJECT_UPDATE_FAILED", "Não foi possível atualizar o projeto processado.", 500)
+    }
+
+    return { ok: true, result }
+  } catch (error) {
+    const code = error instanceof MemorialProcessingError
+      ? error.code
+      : error instanceof ErroApp
+        ? error.codigo
+        : "PROCESSAMENTO_FALHOU"
+    const message = error instanceof MemorialProcessingError || error instanceof ErroApp
+      ? error.message
+      : "Não foi possível processar o memorial. Confira o PDF e tente novamente."
+    const status = error instanceof MemorialProcessingError ? error.status : error instanceof ErroApp ? 422 : 500
+
+    await db
+      .from("projects")
+      .update({ status: "error", error_code: code, error_message: message })
+      .eq("id", projectId)
+      .eq("user_id", userId)
+
+    return { ok: false, error: code, message, status }
+  }
+}
+
+export async function processMemorialForUser(projectId: string, userId: string) {
+  return processMemorial(projectId, userId)
+}
+
+export const memorialEngineMessage = "O memorial será processado após o upload."

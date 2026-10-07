@@ -3,57 +3,39 @@
 import { useMemo, useState, useTransition } from "react"
 import { Download, Map as MapIcon, Plus, Save, Trash2 } from "lucide-react"
 import { saveProjectVertices } from "@/app/dashboard/novo/actions"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { recalcularGeometria, type Vertice } from "@/lib/topocad"
 import { formatArea, formatLength } from "@/lib/format"
 
-export type Vertex = {
-  id: string
-  e: number | null
-  n: number | null
-  azimuth?: string | null
-  distance?: number | null
-}
-
-const zones = ["18S", "19S", "20S", "21S", "22S", "23S", "24S", "25S"]
+export type Vertex = Vertice
 
 function computeMetrics(vertices: Vertex[]) {
-  const points = vertices.filter((v): v is Vertex & { e: number; n: number } => v.e !== null && v.n !== null)
-  if (points.length < 3) return null
-
-  let twiceArea = 0
-  let perimeter = 0
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i]
-    const b = points[(i + 1) % points.length]
-    twiceArea += a.e * b.n - b.e * a.n
-    perimeter += Math.hypot(b.e - a.e, b.n - a.n)
-  }
-  const first = points[0]
-  const last = points[points.length - 1]
-  return { area: Math.abs(twiceArea) / 2, perimeter, closure: Math.hypot(last.e - first.e, last.n - first.n), points }
+  return vertices.length < 3 ? null : recalcularGeometria(vertices).geometria
 }
 
-function PolygonPreview({ points }: { points: { e: number; n: number }[] }) {
-  const minE = Math.min(...points.map((p) => p.e))
-  const maxE = Math.max(...points.map((p) => p.e))
-  const minN = Math.min(...points.map((p) => p.n))
-  const maxN = Math.max(...points.map((p) => p.n))
+function PolygonPreview({ points }: { points: Pick<Vertex, "este" | "norte">[] }) {
+  const minE = Math.min(...points.map((point) => point.este))
+  const maxE = Math.max(...points.map((point) => point.este))
+  const minN = Math.min(...points.map((point) => point.norte))
+  const maxN = Math.max(...points.map((point) => point.norte))
   const span = Math.max(maxE - minE, maxN - minN) || 1
-  const pad = 20
+  const padding = 20
   const size = 400
-  const scale = (size - pad * 2) / span
-  const toXY = (p: { e: number; n: number }) => [pad + (p.e - minE) * scale, size - pad - (p.n - minN) * scale]
-  const path = points.map((p) => toXY(p).join(",")).join(" ")
+  const scale = (size - padding * 2) / span
+  const toXY = (point: Pick<Vertex, "este" | "norte">) => [
+    padding + (point.este - minE) * scale,
+    size - padding - (point.norte - minN) * scale,
+  ]
+  const path = points.map((point) => toXY(point).join(",")).join(" ")
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Pré-visualização do polígono" className="w-full max-h-[420px]">
+    <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Pré-visualização do polígono" className="max-h-[420px] w-full">
       <polygon points={path} className="fill-zinc-100/10 stroke-zinc-100" strokeWidth={1.5} />
-      {points.map((p, i) => {
-        const [x, y] = toXY(p)
-        return <circle key={i} cx={x} cy={y} r={3} className="fill-zinc-100" />
+      {points.map((point, index) => {
+        const [x, y] = toXY(point)
+        return <circle key={`${point.este}-${point.norte}-${index}`} cx={x} cy={y} r={3} className="fill-zinc-100" />
       })}
     </svg>
   )
@@ -71,8 +53,6 @@ export function ProjectView({
   initialDatum: string | null
 }) {
   const [vertices, setVertices] = useState(initialVertices)
-  const [zone, setZone] = useState(initialZone ?? "23S")
-  const [datum, setDatum] = useState(initialDatum ?? "SIRGAS2000")
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const metrics = useMemo(() => computeMetrics(vertices), [vertices])
@@ -80,25 +60,73 @@ export function ProjectView({
   function save() {
     setMessage(null)
     startTransition(async () => {
-      const result = await saveProjectVertices({ projectId, zone, datum, vertices })
+      const result = await saveProjectVertices({ projectId, vertices })
       setMessage(result.ok ? "Vértices salvos." : result.error)
     })
   }
 
   function addVertex() {
-    setVertices((current) => [...current, { id: `V${current.length + 1}`, e: null, n: null, azimuth: null, distance: null }])
+    setVertices((current) => {
+      const code = `MANUAL-${current.length + 1}`
+      const next = current.map((vertex, index) => ({
+        ...vertex,
+        vante: index === current.length - 1 ? code : vertex.vante,
+        editado: true,
+      }))
+
+      return [
+        ...next,
+        {
+          seq: current.length + 1,
+          codigo: code,
+          lonDms: "",
+          latDms: "",
+          lon: 0,
+          lat: 0,
+          altitude: null,
+          vante: current[0]?.codigo ?? code,
+          azimuteDms: "",
+          distancia: 0,
+          confrontacao: "",
+          este: 0,
+          norte: 0,
+          editado: true,
+        },
+      ]
+    })
   }
 
   function removeVertex(index: number) {
-    setVertices((current) => current.filter((_, i) => i !== index))
+    setVertices((current) => {
+      const remaining = current.filter((_, currentIndex) => currentIndex !== index)
+      return remaining.map((vertex, sequence) => ({
+        ...vertex,
+        seq: sequence + 1,
+        vante: remaining[sequence + 1]?.codigo ?? remaining[0]?.codigo ?? vertex.vante,
+        editado: true,
+      }))
+    })
   }
 
-  function updateVertex(index: number, field: "e" | "n", value: string) {
-    const parsed = value === "" ? null : Number(value.replace(",", "."))
+  function updateVertex(index: number, field: "este" | "norte", value: string) {
+    const normalized = value.trim().replace(",", ".")
+    if (!normalized) return
+    const parsed = Number(normalized)
+    if (!Number.isFinite(parsed)) return
+
     setVertices((current) =>
-      current.map((v, i) => (i === index ? { ...v, [field]: Number.isFinite(parsed) ? parsed : v[field] } : v)),
+      current.map((vertex, currentIndex) =>
+        currentIndex === index ? { ...vertex, [field]: parsed, editado: true } : vertex,
+      ),
     )
   }
+
+  const metricsCards = [
+    { label: "Área", value: metrics ? formatArea(metrics.areaM2) : "—" },
+    { label: "Perímetro na grade", value: metrics ? formatLength(metrics.perimetroGradeM) : "—" },
+    { label: "Perímetro do memorial", value: metrics ? formatLength(metrics.perimetroMemorialM) : "—" },
+    { label: "Polígono", value: metrics ? (metrics.poligonoFechado ? "Fechado" : "Aberto") : "—" },
+  ]
 
   return (
     <Tabs defaultValue="dados" className="space-y-6">
@@ -109,13 +137,13 @@ export function ProjectView({
         </TabsList>
         <div className="flex flex-wrap gap-2">
           <a
-            href={`/api/projects/${projectId}/export/pdf`}
+            href={`/api/projetos/${projectId}/exportar?formato=xlsx`}
             className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
           >
-            <Download className="h-4 w-4" aria-hidden="true" /> Memorial PDF
+            <Download className="h-4 w-4" aria-hidden="true" /> Exportar XLSX
           </a>
           <a
-            href={`/api/projects/${projectId}/export/dxf`}
+            href={`/api/projetos/${projectId}/exportar?formato=dxf`}
             className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
           >
             <Download className="h-4 w-4" aria-hidden="true" /> Exportar DXF
@@ -123,123 +151,123 @@ export function ProjectView({
         </div>
       </div>
 
-      <TabsContent value="dados" className="grid gap-6 lg:grid-cols-[1fr_260px]">
-        <div className="rounded-2xl border border-zinc-800/50 overflow-hidden">
-          {vertices.length === 0 ? (
-            <p className="p-10 text-center text-sm text-zinc-500">
-              Os vértices aparecerão aqui assim que o memorial for processado.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-zinc-800 hover:bg-transparent">
-                  <TableHead className="text-zinc-500">Vértice</TableHead>
-                  <TableHead className="text-zinc-500">E (m)</TableHead>
-                  <TableHead className="text-zinc-500">N (m)</TableHead>
-                  <TableHead className="text-zinc-500">Azimute</TableHead>
-                  <TableHead className="text-zinc-500">Distância</TableHead>
-                  <TableHead className="sr-only">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vertices.map((vertex, index) => (
-                  <TableRow key={`${vertex.id}-${index}`} className="border-zinc-800/60">
-                    <TableCell className="font-mono text-zinc-200">{vertex.id}</TableCell>
-                    {(["e", "n"] as const).map((field) => (
-                      <TableCell key={field}>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          defaultValue={vertex[field] ?? ""}
-                          onBlur={(event) => updateVertex(index, field, event.target.value)}
-                          aria-label={`${field.toUpperCase()} do vértice ${vertex.id}`}
-                          className="w-32 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-100"
-                        />
-                      </TableCell>
-                    ))}
-                    <TableCell className="font-mono text-zinc-400">{vertex.azimuth ?? "—"}</TableCell>
-                    <TableCell className="text-zinc-400">{formatLength(vertex.distance)}</TableCell>
-                    <TableCell>
-                      <button type="button" onClick={() => removeVertex(index)} className="rounded-md p-2 text-zinc-500 hover:bg-zinc-800 hover:text-red-400" aria-label={`Remover vértice ${vertex.id}`}>
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </TableCell>
+      <TabsContent value="dados" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+        <DashboardCard>
+          <div className="w-full overflow-x-auto">
+            {vertices.length === 0 ? (
+              <p className="p-10 text-center text-sm text-zinc-500">
+                Os vértices aparecerão aqui assim que o memorial for processado.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-500">Vértice</TableHead>
+                    <TableHead className="text-zinc-500">E (m)</TableHead>
+                    <TableHead className="text-zinc-500">N (m)</TableHead>
+                    <TableHead className="text-zinc-500">Azimute</TableHead>
+                    <TableHead className="text-zinc-500">Distância</TableHead>
+                    <TableHead className="sr-only">Ações</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/60 p-4">
-            <button type="button" onClick={addVertex} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm text-zinc-300 hover:bg-zinc-900">
-              <Plus className="h-4 w-4" aria-hidden="true" /> Adicionar vértice
-            </button>
-            <div className="flex items-center gap-3">
-              {message && <span role="status" className="text-sm text-zinc-400">{message}</span>}
-              <button type="button" onClick={save} disabled={isPending} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-zinc-100 px-4 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-60">
-                <Save className="h-4 w-4" aria-hidden="true" /> {isPending ? "Salvando..." : "Salvar alterações"}
+                </TableHeader>
+                <TableBody>
+                  {vertices.map((vertex, index) => (
+                    <TableRow key={`${vertex.codigo}-${index}`} className="border-zinc-800/60">
+                      <TableCell className="font-mono text-zinc-200">{vertex.codigo}</TableCell>
+                      {(["este", "norte"] as const).map((field) => (
+                        <TableCell key={field}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={vertex[field]}
+                            onBlur={(event) => updateVertex(index, field, event.target.value)}
+                            aria-label={`${field === "este" ? "E" : "N"} do vértice ${vertex.codigo}`}
+                            className="w-32 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-100"
+                          />
+                        </TableCell>
+                      ))}
+                      <TableCell className="font-mono text-zinc-400">{vertex.azimuteDms || "—"}</TableCell>
+                      <TableCell className="text-zinc-400">{formatLength(vertex.distancia)}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => removeVertex(index)}
+                          className="rounded-md p-2 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                          aria-label={`Remover vértice ${vertex.codigo}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/60 p-4">
+              <button
+                type="button"
+                onClick={addVertex}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-zinc-800 px-3 text-sm text-zinc-300 hover:bg-zinc-900"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" /> Adicionar vértice
               </button>
+              <div className="flex items-center gap-3">
+                {message && <span role="status" className="text-sm text-zinc-400">{message}</span>}
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={isPending}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md bg-zinc-100 px-4 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-60"
+                >
+                  <Save className="h-4 w-4" aria-hidden="true" /> {isPending ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </DashboardCard>
 
-        <aside className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5 space-y-4 h-fit">
-          <h2 className="text-sm font-medium text-zinc-300">Parâmetros</h2>
-          <div className="space-y-2">
-            <Label htmlFor="zone" className="text-zinc-400">
-              Fuso UTM
-            </Label>
-            <Select value={zone} onValueChange={setZone}>
-              <SelectTrigger id="zone" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => (
-                  <SelectItem key={z} value={z}>
-                    {z}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="datum" className="text-zinc-400">
-              Datum
-            </Label>
-            <Select value={datum} onValueChange={setDatum}>
-              <SelectTrigger id="datum" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="SIRGAS2000">SIRGAS 2000</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </aside>
+        <DashboardCard className="h-fit">
+          <aside className="flex flex-col gap-4 p-5">
+            <h2 className="text-sm font-medium text-zinc-300">Parâmetros</h2>
+            <dl className="flex flex-col gap-4 text-sm">
+              <div>
+                <dt className="text-zinc-500">Fuso UTM</dt>
+                <dd className="mt-1 font-medium text-zinc-200">{initialZone ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-500">Datum</dt>
+                <dd className="mt-1 font-medium text-zinc-200">
+                  {initialDatum?.replace(/^SIRGAS\s*2000$/i, "SIRGAS 2000") ?? "—"}
+                </dd>
+              </div>
+            </dl>
+          </aside>
+        </DashboardCard>
       </TabsContent>
 
       <TabsContent value="mapa" className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { label: "Área", value: metrics ? formatArea(metrics.area) : "—" },
-            { label: "Perímetro", value: metrics ? formatLength(metrics.perimeter) : "—" },
-            { label: "Erro de fechamento", value: metrics ? formatLength(metrics.closure) : "—" },
-          ].map((card) => (
-            <div key={card.label} className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5">
-              <p className="text-sm text-zinc-500">{card.label}</p>
-              <p className="mt-1 font-display text-lg font-semibold text-zinc-100">{card.value}</p>
-            </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {metricsCards.map((card) => (
+            <DashboardCard key={card.label} className="h-full">
+              <div className="p-5">
+                <p className="text-sm text-zinc-500">{card.label}</p>
+                <p className="mt-1 font-display text-lg font-semibold text-zinc-100">{card.value}</p>
+              </div>
+            </DashboardCard>
           ))}
         </div>
-        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/30 p-6 flex items-center justify-center min-h-[320px]">
-          {metrics ? (
-            <PolygonPreview points={metrics.points} />
-          ) : (
-            <div className="text-center">
-              <MapIcon className="mx-auto h-8 w-8 text-zinc-600" aria-hidden="true" />
-              <p className="mt-3 text-sm text-zinc-500">Pré-visualização 2D disponível após o processamento.</p>
-            </div>
-          )}
-        </div>
+        <DashboardCard>
+          <div className="flex min-h-[320px] items-center justify-center p-6">
+            {metrics ? (
+              <PolygonPreview points={vertices} />
+            ) : (
+              <div className="text-center">
+                <MapIcon className="mx-auto h-8 w-8 text-zinc-600" aria-hidden="true" />
+                <p className="mt-3 text-sm text-zinc-500">A pré-visualização aparece quando o memorial tiver ao menos 3 vértices.</p>
+              </div>
+            )}
+          </div>
+        </DashboardCard>
       </TabsContent>
     </Tabs>
   )

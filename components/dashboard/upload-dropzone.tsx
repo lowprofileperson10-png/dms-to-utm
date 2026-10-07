@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { createProject } from "@/app/dashboard/novo/actions"
 
 const MAX_SIZE = 10 * 1024 * 1024
@@ -81,6 +82,7 @@ export function UploadDropzone() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 max-w-2xl">
+      <DashboardCard>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -100,6 +102,7 @@ export function UploadDropzone() {
         <span className="font-medium text-zinc-200">Arraste o PDF do memorial aqui</span>
         <span className="text-sm text-zinc-500">ou clique para selecionar · máx. 10 MB</span>
       </button>
+      </DashboardCard>
       <input
         ref={inputRef}
         type="file"
@@ -110,7 +113,8 @@ export function UploadDropzone() {
       />
 
       {file && (
-        <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+        <DashboardCard>
+        <div className="flex items-center gap-3 px-4 py-3">
           <FileText className="h-5 w-5 text-zinc-400" aria-hidden="true" />
           <span className="flex-1 truncate text-sm text-zinc-200">{file.name}</span>
           <span className="text-xs text-zinc-500">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
@@ -125,6 +129,7 @@ export function UploadDropzone() {
             </button>
           )}
         </div>
+        </DashboardCard>
       )}
 
       <div className="space-y-2">
@@ -154,7 +159,7 @@ export function UploadDropzone() {
         <p role="alert" className="text-sm text-red-400">
           {error}{" "}
           {limitReached && (
-            <Link href="/planos" className="text-zinc-100 underline underline-offset-4">
+            <Link href="/dashboard/planos" className="text-zinc-100 underline underline-offset-4">
               Ver planos
             </Link>
           )}
