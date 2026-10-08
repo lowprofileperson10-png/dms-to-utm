@@ -64,7 +64,10 @@ export function processarVertices(
       vertice.lon < -180 ||
       vertice.lon > 180 ||
       vertice.lat < -80 ||
-      vertice.lat > 84,
+      vertice.lat > 84 ||
+      (vertice.altitude !== null && !Number.isFinite(vertice.altitude)) ||
+      !Number.isFinite(vertice.distancia) ||
+      vertice.distancia < 0,
   );
   if (coordenadaInvalida) {
     return {
@@ -72,7 +75,7 @@ export function processarVertices(
       avisos: avisosIniciais,
       erro: {
         codigo: "COORDENADA_INVALIDA",
-        mensagem: "O memorial contém longitude ou latitude inválida para uma projeção UTM.",
+        mensagem: "O memorial contém coordenadas, altitude ou distâncias inválidas para a conversão.",
       },
     };
   }

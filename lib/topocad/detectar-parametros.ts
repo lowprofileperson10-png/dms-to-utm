@@ -20,12 +20,18 @@ function normalizarCabecalho(texto: string) {
     .toUpperCase()
 }
 
+function detectarDatums(textoNormalizado: string): DatumDetectado[] {
+  const detectores: [RegExp, DatumDetectado][] = [
+    [/\bSIRGAS\s*2000\b/, "SIRGAS 2000"],
+    [/\bWGS\s*[- ]?84\b/, "WGS 84"],
+    [/\bSAD\s*[- ]?69\b/, "SAD69"],
+    [/\bCORREGO\s+ALEGRE\b/, "Córrego Alegre"],
+  ]
+  return detectores.filter(([regex]) => regex.test(textoNormalizado)).map(([, datum]) => datum)
+}
+
 function detectarDatum(textoNormalizado: string): DatumDetectado | undefined {
-  if (/\bSIRGAS\s*2000\b/.test(textoNormalizado)) return "SIRGAS 2000"
-  if (/\bWGS\s*[- ]?84\b/.test(textoNormalizado)) return "WGS 84"
-  if (/\bSAD\s*[- ]?69\b/.test(textoNormalizado)) return "SAD69"
-  if (/\bCORREGO\s+ALEGRE\b/.test(textoNormalizado)) return "Córrego Alegre"
-  return undefined
+  return detectarDatums(textoNormalizado)[0]
 }
 
 function referenciaDoEpsg(epsg: number): ReferenciaProjetada | undefined {
@@ -41,26 +47,44 @@ function referenciaDoEpsg(epsg: number): ReferenciaProjetada | undefined {
   return undefined
 }
 
-function localizarFuso(textoNormalizado: string) {
+function datumDoEpsg(epsg: number): DatumDetectado | undefined {
+  if (epsg === 4674) return "SIRGAS 2000"
+  if (epsg === 4326) return "WGS 84"
+  return referenciaDoEpsg(epsg)?.datum
+}
+
+function localizarFusos(textoNormalizado: string) {
   const linhas = textoNormalizado.split(/\r?\n/)
   const padroes = [
     /\b(?:FUSO|ZONA)\s*(?:UTM\s*)?[:=]?\s*(\d{1,2})\s*(?:°\s*)?(NORTE|SUL|N|S)?\b/,
     /\bUTM\s*(?:ZONA|ZONE)?\s*[:=]?\s*(\d{1,2})\s*(?:°\s*)?(NORTE|SUL|N|S)?\b/,
   ]
+  const encontrados: { fuso: number; hemisferio?: "S" | "N" }[] = []
+  const vistos = new Set<string>()
 
   for (const linha of linhas) {
     for (const padrao of padroes) {
-      const match = linha.match(padrao)
-      if (!match) continue
-      const sufixo = match[2]
-      return {
-        fuso: Number(match[1]),
-        hemisferio: sufixo ? (/^(?:S|SUL)$/.test(sufixo) ? "S" : "N") as "S" | "N" : undefined,
+      const padraoGlobal = new RegExp(padrao.source, "g")
+      for (const match of linha.matchAll(padraoGlobal)) {
+        const sufixo = match[2]
+        const referencia = {
+          fuso: Number(match[1]),
+          hemisferio: sufixo ? (/^(?:S|SUL)$/.test(sufixo) ? "S" : "N") as "S" | "N" : undefined,
+        }
+        const chave = `${referencia.fuso}:${referencia.hemisferio ?? ""}`
+        if (!vistos.has(chave)) {
+          vistos.add(chave)
+          encontrados.push(referencia)
+        }
       }
     }
   }
 
-  return undefined
+  return encontrados
+}
+
+function localizarFuso(textoNormalizado: string) {
+  return localizarFusos(textoNormalizado)[0]
 }
 
 function falha(codigo: CodigoErro, mensagem: string, avisos: Aviso[] = []): ResultadoDeteccaoParametros {
@@ -71,16 +95,79 @@ function falha(codigo: CodigoErro, mensagem: string, avisos: Aviso[] = []): Resu
 export function detectarParametrosMemorial(texto: string): ResultadoDeteccaoParametros {
   const normalizado = normalizarCabecalho(texto)
   const avisos: Aviso[] = []
-  const epsgMatch = normalizado.match(/\bEPSG\s*[:=]?\s*(\d{4,5})\b/)
-  const epsg = epsgMatch ? Number(epsgMatch[1]) : undefined
-  const referenciaEpsg = epsg === undefined ? undefined : referenciaDoEpsg(epsg)
-  const datumDeclarado = detectarDatum(normalizado)
-  const datumDoEpsg = epsg === 4674 ? "SIRGAS 2000" : referenciaEpsg?.datum
+  const datumsDeclarados = detectarDatums(normalizado)
+  if (datumsDeclarados.length > 1) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `O arquivo declara mais de um datum (${datumsDeclarados.join(", ")}). Confira os metadados antes de converter.`,
+    )
+  }
+  const datumDeclarado = datumsDeclarados[0]
 
-  if (epsg !== undefined && epsg !== 4674 && !referenciaEpsg) {
+  const epsgs = Array.from(new Set(
+    (normalizado.match(/\bEPSG\s*[:=]?\s*\d{4,5}\b/g) ?? []).map((referencia) =>
+      Number(referencia.match(/\d{4,5}/)?.[0]),
+    ),
+  ))
+  const referenciasEpsg = epsgs.map((epsg) => ({ epsg, datum: datumDoEpsg(epsg), referencia: referenciaDoEpsg(epsg) }))
+  const epsgNaoSuportado = referenciasEpsg.find((referencia) => !referencia.datum)?.epsg
+  if (epsgNaoSuportado !== undefined) {
     return falha(
       "CRS_NAO_SUPORTADO",
-      `O arquivo declara EPSG:${epsg}, que ainda não é suportado. Envie coordenadas em SIRGAS 2000 ou um memorial SIGEF com coordenadas geográficas.`,
+      `O arquivo declara EPSG:${epsgNaoSuportado}, que ainda não é suportado. Envie coordenadas em SIRGAS 2000 ou um memorial SIGEF com coordenadas geográficas.`,
+    )
+  }
+
+  const datumsEpsg = Array.from(new Set(referenciasEpsg.flatMap((referencia) => referencia.datum ? [referencia.datum] : [])))
+  if (datumsEpsg.length > 1) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `Os EPSGs declarados pertencem a datums diferentes (${datumsEpsg.join(", ")}). Confira os metadados antes de converter.`,
+    )
+  }
+
+  const referenciasProjetadas = referenciasEpsg.flatMap((referencia) => referencia.referencia ? [referencia.referencia] : [])
+  const projecoesUnicas = new Set(referenciasProjetadas.map(({ datum, fuso, hemisferio }) => `${datum}:${fuso}:${hemisferio}`))
+  if (projecoesUnicas.size > 1) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      "O arquivo declara mais de um EPSG projetado. Confira qual sistema UTM deve ser usado antes de converter.",
+    )
+  }
+  const referenciaEpsg = referenciasProjetadas[0]
+  const epsgIdentificado = referenciasEpsg.find((referencia) => referencia.referencia)?.epsg ?? referenciasEpsg[0]?.epsg
+  const datumEpsg = datumsEpsg[0]
+
+  const referenciasTexto = localizarFusos(normalizado)
+  const fusosTexto = Array.from(new Set(referenciasTexto.map((referencia) => referencia.fuso)))
+  const hemisferiosTexto = Array.from(new Set(referenciasTexto.flatMap((referencia) => referencia.hemisferio ? [referencia.hemisferio] : [])))
+  if (fusosTexto.length > 1 || hemisferiosTexto.length > 1) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `O memorial declara parâmetros UTM conflitantes (${referenciasTexto.map(({ fuso, hemisferio }) => `${fuso}${hemisferio ?? ""}`).join(", ")}). Não foi selecionado um fuso automaticamente.`,
+    )
+  }
+  const fusoTexto = fusosTexto.length > 0
+    ? { fuso: fusosTexto[0]!, hemisferio: hemisferiosTexto[0] }
+    : undefined
+
+  if (datumEpsg && datumDeclarado && datumEpsg !== datumDeclarado) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `O datum declarado (${datumDeclarado}) não corresponde ao EPSG:${epsgIdentificado}. Confira os parâmetros do memorial antes de converter.`,
+    )
+  }
+
+  if (fusoTexto && referenciaEpsg && fusoTexto.fuso !== referenciaEpsg.fuso) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `O fuso ${fusoTexto.fuso} indicado no texto não corresponde ao EPSG:${epsgIdentificado} (fuso ${referenciaEpsg.fuso}). Confira os parâmetros do memorial.`,
+    )
+  }
+  if (fusoTexto?.hemisferio && referenciaEpsg && fusoTexto.hemisferio !== referenciaEpsg.hemisferio) {
+    return falha(
+      "PARAMETROS_INCOMPATIVEIS",
+      `O hemisfério indicado no texto não corresponde ao EPSG:${epsgIdentificado}. Confira os parâmetros do memorial.`,
     )
   }
 
@@ -91,37 +178,15 @@ export function detectarParametrosMemorial(texto: string): ResultadoDeteccaoPara
     )
   }
 
-  if (datumDoEpsg && datumDoEpsg !== "SIRGAS 2000") {
+  if (datumEpsg && datumEpsg !== "SIRGAS 2000") {
     return falha(
       "DATUM_NAO_SUPORTADO",
-      `O EPSG:${epsg} usa o datum ${datumDoEpsg}. A conversão precisa de uma transformação geodésica validada para SIRGAS 2000.`,
-    )
-  }
-
-  if (datumDoEpsg && datumDeclarado && datumDoEpsg !== datumDeclarado) {
-    return falha(
-      "PARAMETROS_INCOMPATIVEIS",
-      `O datum declarado (${datumDeclarado}) não corresponde ao EPSG:${epsg}. Confira os parâmetros do memorial antes de converter.`,
-    )
-  }
-
-  const fusoTexto = localizarFuso(normalizado)
-  const fusoEpsg = referenciaEpsg
-  if (fusoTexto && fusoEpsg && fusoTexto.fuso !== fusoEpsg.fuso) {
-    return falha(
-      "PARAMETROS_INCOMPATIVEIS",
-      `O fuso ${fusoTexto.fuso} indicado no texto não corresponde ao EPSG:${epsg} (fuso ${fusoEpsg.fuso}). Confira os parâmetros do memorial.`,
-    )
-  }
-  if (fusoTexto?.hemisferio && fusoEpsg && fusoTexto.hemisferio !== fusoEpsg.hemisferio) {
-    return falha(
-      "PARAMETROS_INCOMPATIVEIS",
-      `O hemisfério indicado no texto não corresponde ao EPSG:${epsg}. Confira os parâmetros do memorial.`,
+      `O EPSG:${epsgIdentificado} usa o datum ${datumEpsg}. A conversão precisa de uma transformação geodésica validada para SIRGAS 2000.`,
     )
   }
 
   const referencia = referenciaEpsg ?? fusoTexto
-  if (!datumDeclarado && !datumDoEpsg) {
+  if (!datumDeclarado && !datumEpsg) {
     avisos.push({
       codigo: "DATUM_NAO_IDENTIFICADO",
       mensagem: "O datum não aparece no memorial; foi adotado SIRGAS 2000, padrão do fluxo SIGEF.",
