@@ -1,14 +1,18 @@
 import "server-only"
 
-function requiredEnv(name: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" | "CLERK_SECRET_KEY") {
-  const value = process.env[name]?.trim()
-  if (!value) {
+function required(name: string, value: string | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
     throw new Error(`Variável de ambiente obrigatória ausente: ${name}. Configure-a nas Vars do v0.`)
   }
-  return value
+  return trimmed
 }
 
-export const clerkPublishableKey = requiredEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
-export const clerkSecretKey = requiredEnv("CLERK_SECRET_KEY")
-
-void clerkSecretKey
+export const clerkPublishableKey = required(
+  "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+)
+export const clerkSecretKey = required(
+  "CLERK_SECRET_KEY_2",
+  process.env.CLERK_SECRET_KEY_2 || process.env.CLERK_SECRET_KEY,
+)
