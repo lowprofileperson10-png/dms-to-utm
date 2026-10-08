@@ -13,6 +13,6 @@ export const clerkPublishableKey = required(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
 )
 export const clerkSecretKey = required(
-  "CLERK_SECRET_KEY_2",
-  process.env.CLERK_SECRET_KEY_2 || process.env.CLERK_SECRET_KEY,
+  "CLERK_SECRET_KEY",
+  process.env.CLERK_SECRET_KEY,
 )
