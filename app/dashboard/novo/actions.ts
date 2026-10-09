@@ -2,7 +2,7 @@
 
 import { requireUser } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/server"
-import { getUsageStatus, incrementUsage } from "@/lib/usage"
+import { getUsageStatus } from "@/lib/usage"
 import { processMemorial } from "@/lib/engine"
 import { recalcularGeometria, type Vertice } from "@/lib/topocad"
 import { verticeParaLinha } from "@/lib/topocad-db/mapeamento"
@@ -44,7 +44,6 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
   if (insertError) { if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível criar o projeto. Tente novamente." } }
   const { error: fileRecordError } = await supabase.from("project_files").insert({ project_id: projectId, kind: "memorial_pdf", storage_path: storagePath, original_filename: fileName, mime_type: "application/pdf", size_bytes: isFormData && file instanceof File ? file.size : null })
   if (fileRecordError) { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o memorial. Tente novamente." } }
-  try { await incrementUsage(userId) } catch { await supabase.from("projects").delete().eq("id", projectId).eq("user_id", userId); if (isFormData) await supabase.storage.from("memoriais").remove([storagePath]); return { ok: false, error: "Não foi possível registrar o uso. Tente novamente." } }
   await processMemorial(projectId, userId)
   return { ok: true, projectId, storagePath }
 }

@@ -2,9 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
-import { Download, Map as MapIcon, Plus, Save, Trash2 } from "lucide-react"
+import { Map as MapIcon, Plus, Save, Trash2 } from "lucide-react"
 import { saveProjectVertices } from "@/app/dashboard/novo/actions"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
+import { ExportButton } from "@/components/dashboard/export-button"
+import { displayDatum } from "@/lib/project-status"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { recalcularGeometria, type Vertice } from "@/lib/topocad"
@@ -46,13 +48,21 @@ export function ProjectView({
   initialVertices,
   initialZone,
   initialDatum,
+  initialClosed = null,
+  initialClosureErrorM = null,
+  canExport = true,
 }: {
   projectId: string
   initialVertices: Vertex[]
   initialZone: string | null
   initialDatum: string | null
+  initialClosed?: boolean | null
+  initialClosureErrorM?: number | null
+  canExport?: boolean
 }) {
   const [vertices, setVertices] = useState(initialVertices)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const datum = displayDatum(initialDatum)
   const crs = useMemo(() => projectCrs(initialZone), [initialZone])
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -122,11 +132,18 @@ export function ProjectView({
     )
   }
 
+  const isClosed = metrics ? metrics.poligonoFechado : initialClosed
+  const distanceDivergence = metrics ? metrics.divergenciaMaxDistanciaM : initialClosureErrorM
+
   const metricsCards = [
     { label: "Área", value: metrics ? formatArea(metrics.areaM2) : "—" },
     { label: "Perímetro na grade", value: metrics ? formatLength(metrics.perimetroGradeM) : "—" },
     { label: "Perímetro do memorial", value: metrics ? formatLength(metrics.perimetroMemorialM) : "—" },
-    { label: "Polígono", value: metrics ? (metrics.poligonoFechado ? "Fechado" : "Aberto") : "—" },
+    { label: "Polígono", value: isClosed === null ? "—" : isClosed ? "Fechado" : "Aberto" },
+    {
+      label: isClosed === false ? "Erro de fechamento" : "Divergência de distância",
+      value: distanceDivergence === null || distanceDivergence === undefined ? "—" : formatLength(distanceDivergence),
+    },
   ]
 
   return (
@@ -136,21 +153,16 @@ export function ProjectView({
           <TabsTrigger value="dados">Dados</TabsTrigger>
           <TabsTrigger value="mapa">Mapa</TabsTrigger>
         </TabsList>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={`/api/projetos/${projectId}/exportar?formato=xlsx`}
-            className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" /> Exportar XLSX
-          </a>
-          <a
-            href={`/api/projetos/${projectId}/exportar?formato=dxf`}
-            className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" /> Exportar DXF
-          </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportButton projectId={projectId} format="xlsx" disabled={!canExport} onError={setExportError} />
+          <ExportButton projectId={projectId} format="dxf" disabled={!canExport} onError={setExportError} />
         </div>
       </div>
+      {exportError && (
+        <p role="alert" className="text-sm text-amber-400">
+          {exportError}
+        </p>
+      )}
 
       <TabsContent value="dados" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
         <DashboardCard>
@@ -247,7 +259,7 @@ export function ProjectView({
               <div>
                 <dt className="text-zinc-500">Datum</dt>
                 <dd className="mt-1 font-medium text-zinc-200">
-                  {initialDatum?.replace(/^SIRGAS\s*2000$/i, "SIRGAS 2000") ?? "—"}
+                  {datum}
                 </dd>
               </div>
               <div>
@@ -260,7 +272,7 @@ export function ProjectView({
       </TabsContent>
 
       <TabsContent value="mapa" className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {metricsCards.map((card) => (
             <DashboardCard key={card.label} className="h-full">
               <div className="p-5">
@@ -277,7 +289,7 @@ export function ProjectView({
                 vertices={vertices}
                 utmZone={initialZone}
                 hemisphere={crs?.hemisphere ?? null}
-                datum={initialDatum}
+                datum={datum}
               />
             ) : (
               <div className="text-center">

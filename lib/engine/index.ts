@@ -1,6 +1,8 @@
 import "server-only"
 
+import { isStaleProcessing } from "@/lib/project-status"
 import { createAdminClient } from "@/lib/supabase/server"
+import { getUsageStatus, incrementUsage } from "@/lib/usage"
 import { ErroApp, extrairItensDoPdf } from "@/lib/pdf/extrair-itens"
 import { processarPaginas, type ResultadoMotor } from "@/lib/topocad"
 import { projetoDoResultado, verticeParaLinha } from "@/lib/topocad-db/mapeamento"
@@ -24,7 +26,7 @@ export async function processMemorial(projectId: string, userId: string): Promis
   const db = createAdminClient()
   const { data: project, error: projectError } = await db
     .from("projects")
-    .select("id,source_pdf_path,status")
+    .select("id,source_pdf_path,status,updated_at")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -37,7 +39,8 @@ export async function processMemorial(projectId: string, userId: string): Promis
     return { ok: false, error: "PROJETO_NAO_ENCONTRADO", message: "Projeto não encontrado.", status: 404 }
   }
 
-  if (!["draft", "error"].includes(project.status)) {
+  const isStale = isStaleProcessing(project.status, project.updated_at)
+  if (!isStale && !["draft", "error"].includes(project.status)) {
     return {
       ok: false,
       error: "PROJETO_EM_PROCESSAMENTO",
@@ -52,6 +55,16 @@ export async function processMemorial(projectId: string, userId: string): Promis
       error: "PDF_NAO_ENCONTRADO",
       message: "O arquivo PDF deste memorial não foi encontrado.",
       status: 400,
+    }
+  }
+
+  const usage = await getUsageStatus(userId)
+  if (!usage.canCreate) {
+    return {
+      ok: false,
+      error: "COTA_EXCEDIDA",
+      message: "Você atingiu o limite de memoriais do plano Grátis neste mês.",
+      status: 403,
     }
   }
 
@@ -127,6 +140,8 @@ export async function processMemorial(projectId: string, userId: string): Promis
     if (updateError) {
       throw new MemorialProcessingError("PROJECT_UPDATE_FAILED", "Não foi possível atualizar o projeto processado.", 500)
     }
+
+    await incrementUsage(userId).catch(() => undefined)
 
     return { ok: true, result }
   } catch (error) {

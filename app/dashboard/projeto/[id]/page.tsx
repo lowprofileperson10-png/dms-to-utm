@@ -9,7 +9,8 @@ import { SetupNotice } from "@/components/setup-notice"
 import { requireUser } from "@/lib/auth"
 import { formatDate, statusLabels, type ProjectStatus } from "@/lib/format"
 import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAdminClient, createServerClient } from "@/lib/supabase/server"
+import { STALE_PROCESSING_MESSAGE, isStaleProcessing, staleProcessingCutoff } from "@/lib/project-status"
 import { linhaParaVertice } from "@/lib/topocad-db/mapeamento"
 
 export const metadata: Metadata = { title: "Projeto — TopoCAD" }
@@ -25,12 +26,24 @@ export default async function ProjetoPage({ params }: { params: Promise<{ id: st
   const supabase = createServerClient()
   const { data: project } = await supabase
     .from("projects")
-    .select("id,name,status,utm_zone,datum,error_message,created_at")
+    .select("id,name,status,utm_zone,datum,error_message,created_at,updated_at,is_closed,closure_error_m")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle()
 
   if (!project) notFound()
+
+  if (isStaleProcessing(project.status, project.updated_at)) {
+    await createAdminClient()
+      .from("projects")
+      .update({ status: "error", error_code: "PROCESSAMENTO_EXPIRADO", error_message: STALE_PROCESSING_MESSAGE })
+      .eq("id", project.id)
+      .eq("user_id", userId)
+      .eq("status", "processing")
+      .lt("updated_at", staleProcessingCutoff())
+    project.status = "error"
+    project.error_message = STALE_PROCESSING_MESSAGE
+  }
 
   const { data: rows, error: verticesError } = await supabase
     .from("project_vertices")
@@ -75,6 +88,9 @@ export default async function ProjetoPage({ params }: { params: Promise<{ id: st
         initialVertices={vertices}
         initialZone={project.utm_zone}
         initialDatum={project.datum}
+        initialClosed={project.is_closed ?? null}
+        initialClosureErrorM={project.closure_error_m === null ? null : Number(project.closure_error_m)}
+        canExport={project.status === "ready"}
       />
     </div>
   )
