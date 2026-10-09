@@ -8,8 +8,8 @@ import { RetryProjectButton } from "@/components/dashboard/retry-project-button"
 import { SetupNotice } from "@/components/setup-notice"
 import { requireUser } from "@/lib/auth"
 import { formatDate, statusLabels, type ProjectStatus } from "@/lib/format"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { createAdminClient, createServerClient } from "@/lib/supabase/server"
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/config"
+import { createAdminClient } from "@/lib/supabase/server"
 import { STALE_PROCESSING_MESSAGE, isStaleProcessing, staleProcessingCutoff } from "@/lib/project-status"
 import { linhaParaVertice } from "@/lib/topocad-db/mapeamento"
 
@@ -23,13 +23,32 @@ export default async function ProjetoPage({ params }: { params: Promise<{ id: st
     return <SetupNotice variables={["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]} />
   }
 
-  const supabase = createServerClient()
-  const { data: project } = await supabase
+  if (!isSupabaseAdminConfigured()) {
+    return <SetupNotice variables={["SUPABASE_SECRET_KEY"]} />
+  }
+
+  // RLS blocks direct reads of project_vertices; ownership is enforced by the user_id filter below.
+  const supabase = createAdminClient()
+  const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id,name,status,utm_zone,datum,error_message,created_at,updated_at,is_closed,closure_error_m")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle()
+
+  if (projectError) {
+    return (
+      <DashboardCard>
+        <div role="alert" className="flex items-start gap-3 rounded-2xl bg-red-500/10 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
+          <div>
+            <p className="font-medium text-zinc-100">Não foi possível carregar o projeto</p>
+            <p className="mt-1 font-mono text-sm text-zinc-400">{projectError.message}</p>
+          </div>
+        </div>
+      </DashboardCard>
+    )
+  }
 
   if (!project) notFound()
 
@@ -74,7 +93,7 @@ export default async function ProjetoPage({ params }: { params: Promise<{ id: st
                 {verticesError ? "Não foi possível carregar os vértices" : "Não foi possível processar este memorial"}
               </p>
               <p className="mt-1 text-sm text-zinc-400">
-                {verticesError ? "Tente atualizar a página. Se o problema persistir, entre em contato com o suporte." : project.error_message}
+                {verticesError ? `Erro do banco: ${verticesError.message}` : project.error_message}
               </p>
               {!verticesError && (project.status === "error" || project.status === "draft") && (
                 <RetryProjectButton projectId={project.id} />
